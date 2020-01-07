@@ -2,10 +2,59 @@
 include("common.php");
 
 $db = get_PDO();
-update_resource_status($db, 1, APPROVED);
+$tags = array(1, 2);
+add_tags($db, 2, $tags);
 success("done");
 
-function delete_resource($db)
+function get_approved_resources($db) {
+   $query = "SELECT * " .
+            "FROM resource " .
+            "WHERE status = APPROVED;";
+
+}
+
+/**
+  * Queries the database to add category tags to a resource
+  * WILL THROW PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String/int} resource - The ID of the resource to add tags to
+  * @param {String/int []} categories - The category tags to add to the resource
+  * @return {Boolean} - TRUE if category was added, FALSE otherwise.
+*/
+function add_tags($db, $resource, $categories) {
+   $query = "INSERT INTO tag(resource_id, category_id) " .
+            "SELECT r.id, c.id " .
+            "FROM resource r, category c " .
+            "WHERE r.id = ? AND c.id IN ";
+   $category_list = "(?";
+   for ($i = 1; $i < count($categories); $i++) {
+      $category_list = $category_list . ", ?";
+   }
+   $category_list = $category_list . ");";
+   $query = $query . $category_list;
+   $stmt = $db->prepare($query);
+   $stmt->execute(array_merge([$resource], $categories));
+   $result = $stmt->rowCount() > 0;
+   return $result;
+}
+
+/**
+  * Queries the database to delete a resource
+  * WILL THROW PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String/int} id - The ID of the resource to remove
+  * @return {Boolean} - TRUE if category was added, FALSE otherwise.
+*/
+function delete_resource($db, $id) {
+   $query = "DELETE FROM resource WHERE id = :id;";
+   $stmt = $db->prepare($query);
+   $params = array("id" => $id);
+   $stmt->execute($params);
+   $result = $stmt->rowCount() > 0;
+   $stmt->closeCursor();
+   $stmt = null;
+   return $stmt;
+}
 
 /**
   * Queries the database to update the status of a resource
