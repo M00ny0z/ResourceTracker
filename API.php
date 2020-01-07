@@ -3,14 +3,36 @@ include("common.php");
 
 $db = get_PDO();
 $tags = array(1, 2);
-add_tags($db, 2, $tags);
+//update_resource_status($db, 2, APPROVED);
+print_r(get_approved_resources($db, [1, 2]));
 success("done");
 
-function get_approved_resources($db) {
-   $query = "SELECT * " .
-            "FROM resource " .
-            "WHERE status = APPROVED;";
-
+/**
+  * Queries the database to get all of the currently approved resources
+  * WILL THROW PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String/int} resource - The ID of the resource to add tags to
+  * @param {String/int []} categories - The category tags to add to the resource
+  * @return {Boolean} - TRUE if category was added, FALSE otherwise.
+*/
+function get_approved_resources($db, $categories = "") {
+   $status = APPROVED;
+   $query = "SELECT DISTINCT r.id, r.name, r.link, r.description, r.icon, r.status " .
+            "FROM resource r, tag t " .
+            "WHERE r.status = '{$status}' AND t.resource_id = r.id ";
+   $data;
+   if ($categories != "") {
+      $stmt = $db->prepare($query);
+      $query = $query . "AND t.category_id IN ";
+      $query = $query . build_categories_string($categories);
+      $stmt->execute($categories);
+      $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+      $stmt->closeCursor();
+      $stmt = null;
+   } else {
+      $data = $db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+   }
+   return $data;
 }
 
 /**
@@ -26,12 +48,7 @@ function add_tags($db, $resource, $categories) {
             "SELECT r.id, c.id " .
             "FROM resource r, category c " .
             "WHERE r.id = ? AND c.id IN ";
-   $category_list = "(?";
-   for ($i = 1; $i < count($categories); $i++) {
-      $category_list = $category_list . ", ?";
-   }
-   $category_list = $category_list . ");";
-   $query = $query . $category_list;
+   $query = $query . build_categories_string($categories);
    $stmt = $db->prepare($query);
    $stmt->execute(array_merge([$resource], $categories));
    $result = $stmt->rowCount() > 0;
@@ -117,6 +134,21 @@ function add_resource($db, $name, $link, $desc, $icon) {
    $stmt->closeCursor();
    $stmt = null;
    return $result;
+}
+
+/**
+  * Builds a string of question marks in parenthesis, one question mark for each category
+  * THERE MUST BE AT LEAST ONE CATEGORY IN THE ARRAY PROVIDED
+  * @param {String/int []} categories - The category tags to build a SQL string for
+  * @return {String} - The built escape string
+*/
+function build_categories_string($categories) {
+   $category_list = "(?";
+   for ($i = 1; $i < count($categories); $i++) {
+      $category_list = $category_list . ", ?";
+   }
+   $category_list = $category_list . ");";
+   return $category_list;
 }
 
 ?>
