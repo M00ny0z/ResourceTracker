@@ -1,11 +1,80 @@
 <?php
 include("common.php");
+//header("Content-type: text/html");
+$uri = explode("/", parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH));
+print_r($uri);
+$path = strtolower($uri[3]);
+$method = $_SERVER["REQUEST_METHOD"];
 
-$db = get_PDO();
-$tags = array(1, 2);
-//update_resource_status($db, 2, APPROVED);
-print_r(get_approved_resources($db, [1, 2]));
-success("done");
+if ($path === "resources") {
+   if ($method === "GET") {
+      try {
+
+      } catch (PDOEXCEPTION $ex) {
+         db_error();
+      }
+      header("Content-type: application/json");
+   }
+}
+
+/**
+  * Queries the database to get all resources
+  * WILL THROW PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @return {JSON[]} - A JSON array, each item being a resource which includes
+  *                    its ID, name, link, description, icon, status, and user
+*/
+function get_all_resources($db) {
+   $query = "SELECT * FROM resource;";
+   $data = $db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+   return $data;
+}
+
+
+/**
+  * Queries the database to get all categories
+  * WILL THROW PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @return {JSON[]} - A JSON array, each item being a category which includes its name and ID
+*/
+function get_categories($db) {
+   $query = "SELECT * FROM category;";
+   $data = $db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+   return $data;
+}
+
+/**
+  * Queries the database to remove a category from the database
+  * WILL THROW PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String} category - The categoryID to remove
+  * @return {Boolean} - TRUE if category was removed, FALSE otherwise.
+*/
+function remove_category($db, $category) {
+   $params = array("id" => $category);
+   remove_tags($db, $params);
+   $query = "DELETE FROM category WHERE id = :id;";
+   $stmt = $db->prepare($query);
+   $stmt->execute($params);
+   $result = $stmt->rowCount() > 0;
+   $stmt->closeCursor();
+   $stmt = null;
+   return $result;
+}
+
+/**
+  * Queries the database to remove all tag-connections with a specified category
+  * WILL THROW PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String[]} category - An associative array, must have key "id" and value of category to
+  *                              remove
+*/
+function remove_tags($db, $category) {
+   $query = "DELETE FROM tag WHERE category_id = :id;";
+   $stmt = $db->prepare($query);
+   $stmt->execute($category);
+
+}
 
 /**
   * Queries the database to get all of the currently approved resources
@@ -62,7 +131,7 @@ function add_tags($db, $resource, $categories) {
   * @param {String/int} id - The ID of the resource to remove
   * @return {Boolean} - TRUE if category was added, FALSE otherwise.
 */
-function delete_resource($db, $id) {
+function remove_resource($db, $id) {
    $query = "DELETE FROM resource WHERE id = :id;";
    $stmt = $db->prepare($query);
    $params = array("id" => $id);
