@@ -7,6 +7,7 @@
   ini_set('display_errors', 1);
   const STANDBY = "STANDBY";
   const APPROVED = "APPROVED";
+  const DATABASE_ERROR = "Something has occurred with database. Please try again later.";
 
   /**
    * Returns a PDO object connected to the speclister database. Throws
@@ -63,6 +64,19 @@ function check_exists($db, $table, $attribute, $value) {
 function success($msg) {
    header("Content-type: text/plain");
    echo($msg);
+}
+
+/**
+ * Prints out a plain text 400 error message given $msg. If given a second (optional) argument as
+ * an PDOException, prints details about the cause of the exception.
+ * @param $msg {string} - Plain text 400 message to output
+ * @param $ex {PDOException} - (optional) Exception object with additional exception details to print
+ */
+ // TODO: MAKE SO IT CHECKS ERROR CODE AND OUTPUTS CORRESPONDING ERROR MESSAGE
+function db_error($ex="") {
+   header("HTTP/1.1 503 Invalid Request");
+   header("Content-type: text/plain");
+   die(DATABASE_ERROR . "Error details: {$ex}");
 }
 
   /**
