@@ -8,6 +8,7 @@ CREATE TABLE category(
   PRIMARY KEY(id)
 );
 
+-- USER TRACKS WHO ADDED THE RESOURCE
 CREATE TABLE resource(
   id          INT NOT NULL AUTO_INCREMENT,
   name        VARCHAR(50) NOT NULL,
@@ -15,6 +16,7 @@ CREATE TABLE resource(
   description TEXT NOT NULL,
   icon        VARCHAR(100) NOT NULL,
   status      VARCHAR(20) NOT NULL DEFAULT "STANDBY",
+  user        VARCHAR(255) NOT NULL,
   PRIMARY KEY(id)
 );
 
