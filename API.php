@@ -1,20 +1,127 @@
 <?php
 include("common.php");
-//header("Content-type: text/html");
+header("Content-type: text/html");
 $uri = explode("/", parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH));
-print_r($uri);
 $path = strtolower($uri[3]);
 $method = $_SERVER["REQUEST_METHOD"];
+$user = "em66@uw.edu";
 
 if ($path === "resources") {
-   if ($method === "GET") {
-      try {
-
-      } catch (PDOEXCEPTION $ex) {
-         db_error();
+   // IF THEY PROVIDED AN ID
+   if (isset($uri[4]) && $uri[4] != "") {
+      if ($uri[4] === "approve" || $uri[4] === "standby" || $uri[4] === "admin") {
+         try {
+            $db = get_PDO();
+            if (is_admin($db, $user)) {
+               $action = $uri[4];
+               $resource_id = $uri[5];
+               if ($method === "PUT") {
+                  if ($action === "approve") {
+                     $outcome = update_resource_status($db, $resource_id, APPROVE);
+                     if ($outcome) {
+                        success("Successfully approved resource.");
+                     } else {
+                        invalid_request(RESOURCE_UPDATE_ERROR);
+                     }
+                  } else if ($action === "standby") {
+                     $outcome = update_resource_status($db, $resource_id, STANDBY);
+                     if ($outcome) {
+                        success("Successfully put resource on standby.");
+                     } else {
+                        invalid_request(RESOURCE_UPDATE_ERROR);
+                     }
+                  } else {
+                     invalid_request(OPERATION_ERROR);
+                  }
+               } else if ($method === "GET") {
+                  if ($action === "admin") {
+                     try {
+                        $data = get_all_resources($db);
+                        header("Content-type: application/json");
+                        echo(json_encode($data));
+                     } catch (PDOException $ex) {
+                        db_error();
+                     }
+                  }
+               } else {
+                  invalid_request(OPERATION_ERROR);
+               }
+            } else {
+               invalid_request(ADMIN_ERROR);
+            }
+            $db = null;
+         } catch(PDOException $ex) {
+            db_error();
+         }
+      } else {
+         // IF THEY PROVIDED A RESOURCE ID
+         $resource_id = $uri[4];
+         if ($method === "GET") {
+            echo("getting specific resource page.");
+         } else if ($method === "DELETE") {
+            try {
+               $db = get_PDO();
+               if (is_admin($db, $user)) {
+                  remove_resource($db, $resource_id);
+               } else {
+                  invalid_request(ADMIN_ERROR);
+               }
+            } catch(PDOException $ex) {
+               db_error();
+            }
+         }
       }
-      header("Content-type: application/json");
+   } else {
+      if ($method === "GET") {
+         try {
+            $db = get_PDO();
+            $data = get_approved_resources($db);
+            header("Content-type: application/json");
+            echo(json_encode($data));
+         } catch (PDOException $ex) {
+            db_error();
+         }
+      } else if ($method === "POST") {
+         if (isset($_POST["name"]) && isset($_POST["link"]) && isset($_POST["desc"]) &&
+            isset($_POST["icon"]) && isset($_POST["tags"])) {
+            $name = $_POST["name"];
+            $link = $_POST["link"];
+            $desc = $_POST["desc"];
+            $icon = $_POST["icon"];
+            $tags = $_POST["tags"];
+            if (verify_resource_info($name, $link, $desc, $icon, $tags)) {
+               try {
+                  $db = get_PDO();
+                  add_resource($db, $name, $link, $desc, $icon, $user);
+                  add_tags($db, $db->lastInsertId(), $tags);
+                  success("Successfully added resource.");
+               } catch (PDOException $ex) {
+                  db_error($ex);
+               }
+            } else {
+               invalid_request(RESOURCE_VALID_ERROR);
+            }
+         } else {
+            invalid_request(RESOURCE_VALID_ERROR);
+         }
+      }
    }
+}
+
+function is_admin($db, $netid) {
+   return true;
+}
+
+/**
+  * Verifies the provided details of a supposed resource to submit
+  * @param {String} name - The name of the resource to verify
+  * @param {String} link - The link to the resource to verify
+  * @param {String} description - The description of the resource to verify
+  * @param {String} icon - The icon of the resource to verify
+  * @return {Boolean} - TRUE if all provided values are valid, FALSE otherwise
+*/
+function verify_resource_info($name, $link, $description, $icon, $tags) {
+   return true;
 }
 
 /**
@@ -73,7 +180,6 @@ function remove_tags($db, $category) {
    $query = "DELETE FROM tag WHERE category_id = :id;";
    $stmt = $db->prepare($query);
    $stmt->execute($category);
-
 }
 
 /**
@@ -86,7 +192,7 @@ function remove_tags($db, $category) {
 */
 function get_approved_resources($db, $categories = "") {
    $status = APPROVED;
-   $query = "SELECT DISTINCT r.id, r.name, r.link, r.description, r.icon, r.status " .
+   $query = "SELECT DISTINCT r.id, r.name, r.link, r.description, r.icon " .
             "FROM resource r, tag t " .
             "WHERE r.status = '{$status}' AND t.resource_id = r.id ";
    $data;
@@ -188,21 +294,21 @@ function add_category($db, $name) {
   * @param {String} link - The link of the website of the resource
   * @param {String} desc - The description of the resource
   * @param {String} icon - The name of the icon to represent the resource
+  * @param {String} user - The netid of the user that is submitting this resource
   * @return {Boolean} - TRUE if resource was added, FALSE otherwise.
 */
-function add_resource($db, $name, $link, $desc, $icon) {
-   $query = "INSERT INTO resource(name, link, description, icon) VALUES " .
-            "(:name, :link, :description, :icon);";
+function add_resource($db, $name, $link, $desc, $icon, $user) {
+   $query = "INSERT INTO resource(name, link, description, icon, user) VALUES " .
+            "(:name, :link, :description, :icon, :user);";
    $stmt = $db->prepare($query);
    $params = array("name" => $name,
                    "link" => $link,
                    "description" => $desc,
-                   "icon" => $icon);
+                   "icon" => $icon,
+                   "user" => $user);
    $stmt->execute($params);
-   $result = $stmt->rowCount() > 0;
    $stmt->closeCursor();
    $stmt = null;
-   return $result;
 }
 
 /**
