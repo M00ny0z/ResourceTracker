@@ -27,3 +27,9 @@ CREATE TABLE tag(
    FOREIGN KEY(category_id) REFERENCES category(id),
    FOREIGN KEY(resource_id) REFERENCES resource(id)
 );
+
+-- TO HANDLE BLOCKING ANYONE
+CREATE TABLE blocked(
+   netid VARCHAR(255) NOT NULL,
+   PRIMARY KEY(netid)
+);
