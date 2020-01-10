@@ -1,13 +1,19 @@
 <?php
   /*
-   * Configuration/common file for the ProgressTracker API
+   * Configuration/common file for the ResourceTracker API
    */
 
-  error_reporting(E_ALL);
-  ini_set('display_errors', 1);
-  const STANDBY = "STANDBY";
-  const APPROVED = "APPROVED";
-  const DATABASE_ERROR = "Something has occurred with database. Please try again later.";
+   error_reporting(E_ALL);
+   ini_set('display_errors', 1);
+   const STANDBY = "STANDBY";
+   const APPROVE = "APPROVED";
+   const DATABASE_ERROR = "Something has occurred with database. Please try again later.";
+   const RESOURCE_VALID_ERROR = "I need a valid name, link, description, and icon to add a new " .
+                               "resource.";
+   const ADMIN_ERROR = "You are not an admin and are not allowed to access this.";
+   const OPERATION_ERROR = "No other operations are supported for this endpoint";
+   const RESOURCE_UPDATE_ERROR = "Please make sure the resource ID provided is valid and that " .
+                                 "the resource isn't already at this status.";
 
   /**
    * Returns a PDO object connected to the speclister database. Throws
@@ -64,6 +70,16 @@ function check_exists($db, $table, $attribute, $value) {
 function success($msg) {
    header("Content-type: text/plain");
    echo($msg);
+}
+
+/**
+  * Outputs a 400 Plain Text error message for an invalid request
+  * @param {String} msg - The corresponding invalid request message detailing what went wrong
+*/
+function invalid_request($msg) {
+   header("HTTP/1.1 400 Invalid Request");
+   header("Content-type: text/plain");
+   die($msg);
 }
 
 /**
