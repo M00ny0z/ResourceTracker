@@ -1,6 +1,5 @@
 <?php
 include("common.php");
-header("Content-type: text/html");
 $uri = explode("/", parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH));
 $path = strtolower($uri[3]);
 $method = $_SERVER["REQUEST_METHOD"];
@@ -14,8 +13,8 @@ if ($path === "resources") {
             $db = get_PDO();
             if (is_admin($db, $user)) {
                $action = $uri[4];
-               $resource_id = $uri[5];
                if ($method === "PUT") {
+                  $resource_id = $uri[5];
                   if ($action === "approve") {
                      $outcome = update_resource_status($db, $resource_id, APPROVE);
                      if ($outcome) {
@@ -57,12 +56,18 @@ if ($path === "resources") {
          // IF THEY PROVIDED A RESOURCE ID
          $resource_id = $uri[4];
          if ($method === "GET") {
-            echo("getting specific resource page.");
+            try {
+               header("Content-type: text/html");
+               echo("getting specific resource page.");
+            } catch (PDOException $ex) {
+               db_error();
+            }
          } else if ($method === "DELETE") {
             try {
                $db = get_PDO();
                if (is_admin($db, $user)) {
                   remove_resource($db, $resource_id);
+                  success("Successfully deleted resource.");
                } else {
                   invalid_request(ADMIN_ERROR);
                }
@@ -75,7 +80,12 @@ if ($path === "resources") {
       if ($method === "GET") {
          try {
             $db = get_PDO();
-            $data = get_approved_resources($db);
+            $data;
+            if (isset($_GET["categories"])) {
+               $data = get_approved_resources($db, $_GET["categories"]);
+            } else {
+               $data = get_approved_resources($db);
+            }
             header("Content-type: application/json");
             echo(json_encode($data));
          } catch (PDOException $ex) {
@@ -83,17 +93,18 @@ if ($path === "resources") {
          }
       } else if ($method === "POST") {
          if (isset($_POST["name"]) && isset($_POST["link"]) && isset($_POST["desc"]) &&
-            isset($_POST["icon"]) && isset($_POST["tags"])) {
+            isset($_POST["icon"])) {
             $name = $_POST["name"];
             $link = $_POST["link"];
             $desc = $_POST["desc"];
             $icon = $_POST["icon"];
-            $tags = $_POST["tags"];
             if (verify_resource_info($name, $link, $desc, $icon, $tags)) {
                try {
                   $db = get_PDO();
                   add_resource($db, $name, $link, $desc, $icon, $user);
-                  add_tags($db, $db->lastInsertId(), $tags);
+                  if (isset($_POST["tags"])) {
+                     add_tags($db, $db->lastInsertId(), $_POST["tags"]);
+                  }
                   success("Successfully added resource.");
                } catch (PDOException $ex) {
                   db_error($ex);
@@ -106,10 +117,140 @@ if ($path === "resources") {
          }
       }
    }
+} else if ($path === "categories") {
+   if ($method === "DELETE") {
+      try {
+         $db = get_PDO();
+         if (is_admin($db, $user)) {
+            if (isset($uri[4]) && $uri[4] != "") {
+               $category = $uri[4];
+               remove_category($db, $category);
+               success("Successfully removed category.");
+            } else {
+               invalid_request("A valid category ID is required.");
+            }
+         } else {
+            invalid_request(ADMIN_ERROR);
+         }
+      } catch (PDOException $ex) {
+         db_error();
+      }
+   } else if ($method === "POST") {
+      try {
+         $db = get_PDO();
+         if (is_admin($db, $user)) {
+            if (isset($_POST["name"])) {
+               add_category($db, $_POST["name"]);
+               success("Successfully added new category.");
+            } else {
+               invalid_request("I need a valid name to insert.");
+            }
+         } else {
+            invalid_request(ADMIN_ERROR);
+         }
+      } catch (PDOException $ex) {
+         db_error();
+      }
+   } else if ($method === "GET") {
+      try {
+         $db = get_PDO();
+         $data = get_categories($db);
+         header("Content-type: application/json");
+         echo(json_encode($data));
+      } catch (PDOException $ex) {
+         db_error();
+      }
+   } else {
+      invalid_request(OPERATION_ERROR);
+   }
+} else if ($path === "users") {
+   if (isset($uri[4]) && $uri[4] != "") {
+      $action = $uri[4];
+      if (isset($uri[5]) && $uri[5] != "") {
+         $netid = $uri[5];
+         if ($method === "POST") {
+            if ($action === "block") {
+               try {
+                  $db = get_PDO();
+                  if (is_admin($db, $user)) {
+                     block_netid($db, $netid);
+                     success("Successfully blocked netid.");
+                  } else {
+                     invalid_request(ADMIN_ERROR);
+                  }
+               } catch (PDOException $ex) {
+                  if ($ex->getCode() === "23000") {
+                     invalid_request("Please make sure netid is not already blocked.");
+                  } else {
+                     db_error();
+                  }
+               }
+            } else if ($action === "unblock") {
+               try {
+                  $db = get_PDO();
+                  if (is_admin($db, $user)) {
+                     $outcome = unblock_netid($db, $netid);
+                     if ($outcome) {
+                        success("Successfully unblocked netid.");
+                     } else {
+                        invalid_request("Please make sure netid has not already been unblocked.");
+                     }
+                  } else {
+                     invalid_request(ADMIN_ERROR);
+                  }
+               } catch (PDOException $ex) {
+                  db_error();
+               }
+            } else {
+               invalid_request(OPERATION_ERROR);
+            }
+         } else {
+            invalid_request(OPERATION_ERROR);
+         }
+      } else {
+         invalid_request("I need a valid netid for these actions.");
+      }
+   } else {
+      invalid_request("I need a valid action of either block or unblock.");
+   }
 }
 
 function is_admin($db, $netid) {
    return true;
+}
+
+/**
+  * Adds a new netid to the block list so that they cannot submit any more resources
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String} netid - The netid to add to the block list
+  * @return {Boolean} - TRUE if adding netid to block list was successful, FALSE otherwise
+*/
+function block_netid($db, $netid) {
+   $query = "INSERT INTO blocked VALUES (:netid);";
+   $stmt = $db->prepare($query);
+   $params = array("netid" => $netid);
+   $stmt->execute($params);
+   $result = $stmt->rowCount() > 0;
+   $stmt->closeCursor();
+   $stmt = null;
+   return $result;
+}
+
+/**
+  * Removes a netid from the block list
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String} netid - The netid to remove from the block list
+  * @return {Boolean} - TRUE if removing netid from block list was successful, FALSE otherwise
+*/
+function unblock_netid($db, $netid) {
+   $query = "DELETE FROM blocked WHERE netid = :netid;";
+   $stmt = $db->prepare($query);
+   $params = array("netid" => $netid);
+   $stmt->execute($params);
+   $result = $stmt->rowCount() > 0;
+   $stmt->closeCursor();
+   $stmt = null;
+   return $result;
 }
 
 /**
@@ -191,20 +332,23 @@ function remove_tags($db, $category) {
   * @return {Boolean} - TRUE if category was added, FALSE otherwise.
 */
 function get_approved_resources($db, $categories = "") {
-   $status = APPROVED;
+   $status = APPROVE;
    $query = "SELECT DISTINCT r.id, r.name, r.link, r.description, r.icon " .
-            "FROM resource r, tag t " .
-            "WHERE r.status = '{$status}' AND t.resource_id = r.id ";
+            "FROM resource r ";
    $data;
    if ($categories != "") {
+      // IF FILTERING BY CATEGORIES
+      $query = $query . ", tag t " .
+      $query =          "WHERE r.status = '{$status}' AND t.resource_id = r.id AND " .
+                        "t.category_id IN " . build_categories_string($categories);
       $stmt = $db->prepare($query);
-      $query = $query . "AND t.category_id IN ";
-      $query = $query . build_categories_string($categories);
       $stmt->execute($categories);
       $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
       $stmt->closeCursor();
       $stmt = null;
    } else {
+      // ELSE GET ALL OF THEM
+      $query = $query . "WHERE r.status = '{$status}'";
       $data = $db->query($query)->fetchAll(PDO::FETCH_ASSOC);
    }
    return $data;
