@@ -1,6 +1,7 @@
 DROP TABLE IF EXISTS tag;
 DROP TABLE IF EXISTS resource;
 DROP TABLE IF EXISTS category;
+DROP TABLE IF EXISTS blocked;
 
 CREATE TABLE category(
   id   INT NOT NULL AUTO_INCREMENT,
@@ -33,3 +34,16 @@ CREATE TABLE blocked(
    netid VARCHAR(255) NOT NULL,
    PRIMARY KEY(netid)
 );
+
+-- DATA USED FOR TESTING
+INSERT INTO category(name) VALUES
+("Housing"),
+("Food"),
+("Academic");
+
+INSERT INTO resource(name, link, description, icon, user) VALUES
+("KOZ", "www.koz.com", "cheap apartments for students.", "fa-icon", "em66@uw.edu"),
+("Pantry", "www.pantry.com", "free food for students", "fa-food", "em66@uw.edu"),
+("Tacoma Learning Center", "www.tlc.com", "free tutoring for UWT students", "fa-study", "em66@uw.edu");
+
+INSERT INTO tag VALUES (2, 2);
