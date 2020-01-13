@@ -8,51 +8,84 @@ $user = "em66@uw.edu";
 if ($path === "resources") {
    // IF THEY PROVIDED AN ID
    if (isset($uri[4]) && $uri[4] != "") {
-      if ($uri[4] === "approve" || $uri[4] === "standby" || $uri[4] === "admin") {
-         try {
-            $db = get_PDO();
-            if (is_admin($db, $user)) {
-               $action = $uri[4];
-               if ($method === "PUT") {
-                  $resource_id = $uri[5];
-                  if ($action === "approve") {
+      $action = $uri[4];
+      if ($action === "approve" || $action === "standby" || $action === "admin" ||
+          $action === "tag") {
+         $db = get_PDO();
+         if (is_admin($db, $user)) {
+            if ($method === "PUT") {
+               $resource_id = $uri[5];
+               if ($action === "approve") {
+                  try {
                      $outcome = update_resource_status($db, $resource_id, APPROVE);
                      if ($outcome) {
                         success("Successfully approved resource.");
                      } else {
                         invalid_request(RESOURCE_UPDATE_ERROR);
                      }
-                  } else if ($action === "standby") {
+                  } catch (PDOException $ex) {
+                     db_error();
+                  }
+               } else if ($action === "standby") {
+                  try {
                      $outcome = update_resource_status($db, $resource_id, STANDBY);
                      if ($outcome) {
                         success("Successfully put resource on standby.");
                      } else {
                         invalid_request(RESOURCE_UPDATE_ERROR);
                      }
-                  } else {
-                     invalid_request(OPERATION_ERROR);
+                  } catch (PDOException $ex) {
+                     db_error();
                   }
-               } else if ($method === "GET") {
-                  if ($action === "admin") {
+               } else {
+                  invalid_request(OPERATION_ERROR);
+               }
+            } else if ($method === "GET") {
+               if ($action === "admin") {
+                  try {
+                     $data = get_all_resources($db);
+                     header("Content-type: application/json");
+                     echo(json_encode($data));
+                  } catch (PDOException $ex) {
+                     db_error();
+                  }
+               }
+            } else if ($method === "POST") {
+               if ($action === "tag") {
+                  if (isset($_POST["id"]) && isset($_POST["add"]) && isset($_POST["remove"])) {
                      try {
-                        $data = get_all_resources($db);
-                        header("Content-type: application/json");
-                        echo(json_encode($data));
+                        $id = $_POST["id"];
+                        $categories_to_add = $_POST["add"];
+                        $categories_to_remove = $_POST["remove"];
+                        $outcome = true;
+                        if (count($categories_to_add) > 0) {
+                           $outcome = $outcome && add_tags($db, $id, $categories_to_add);
+                        }
+                        if (count($categories_to_remove) > 0) {
+                           $outcome = $outcome && remove_tags($db, $id, $categories_to_remove);
+                        }
+                        if ($outcome) {
+                           success("Successfully updated resource tags.");
+                        } else {
+                           invalid_request("Please make sure that the resource ID and category " .
+                                           "IDs provided are valid.");
+                        }
                      } catch (PDOException $ex) {
                         db_error();
                      }
+                  } else {
+                     invalid_request("I need a valid ID, add, and remove values. Please see " .
+                                     "the documentation for more information.");
                   }
                } else {
                   invalid_request(OPERATION_ERROR);
                }
             } else {
-               invalid_request(ADMIN_ERROR);
+               invalid_request(OPERATION_ERROR);
             }
-            $db = null;
-         } catch(PDOException $ex) {
-            db_error();
+         } else {
+            invalid_request(ADMIN_ERROR);
          }
-      } else {
          // IF THEY PROVIDED A RESOURCE ID
          $resource_id = $uri[4];
          if ($method === "GET") {
@@ -300,7 +333,7 @@ function get_categories($db) {
 */
 function remove_category($db, $category) {
    $params = array("id" => $category);
-   remove_tags($db, $params);
+   remove_category_tags($db, $params);
    $query = "DELETE FROM category WHERE id = :id;";
    $stmt = $db->prepare($query);
    $stmt->execute($params);
@@ -317,10 +350,29 @@ function remove_category($db, $category) {
   * @param {String[]} category - An associative array, must have key "id" and value of category to
   *                              remove
 */
-function remove_tags($db, $category) {
+function remove_category_tags($db, $category) {
    $query = "DELETE FROM tag WHERE category_id = :id;";
    $stmt = $db->prepare($query);
    $stmt->execute($category);
+}
+
+/**
+  * Queries the database to remove all tag-connections with a specified category and a specified
+  * resource
+  * WILL THROW PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String/int} resource - The
+  * @param {String/int[]} categories - Each item should be a categoryID, should be at least one item
+*/
+function remove_tags($db, $resource, $categories) {
+   $query = "DELETE FROM tag WHERE resource_id = :id AND category_id IN " .
+            build_categories_string($categories);
+   $stmt = $db->prepare($query);
+   $stmt->execute(array_merge([$resource], $categories));
+   $result = $stmt->rowCount() > 0;
+   $stmt->closeCursor();
+   $stmt = null;
+   return $result;
 }
 
 /**
