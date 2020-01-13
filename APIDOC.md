@@ -18,13 +18,14 @@ If a database error has occurred in ANY endpoint, the following will be returned
 3. [resources/approve/:id](#resources/approve/:id)
 4. [resources/standby/:id](#resources/standby/:id)
 5. [resources/admin](#resources/admin)
+6. [resources/tag](#resources/tag)
 
 
-[Categories][#categories]
+[Categories](#categories)
 1. [categories/](#categories/)
 2. [categories/:name](#categories/:name)
 
-[User][#user]
+[User](#user)
 1. [user/block/:netid](#user/block/:netid)
 2. [user/unblock/:netid](#user/unblock/:netid)
 
@@ -243,6 +244,39 @@ NOTE: You must be an admin to access this endpoint.
 
 **Error Handling:**
 No potential errors outside of database error.
+
+### *resources/tag/*
+**Request Format:** /resourcetracker/tag
+
+                    form-data: (id: {RESOURCE_ID}, add: [CATEGORY_ID, ...],
+                                remove: [CATEGORY_ID, ...])
+
+**Request Type:** POST
+
+**Returned Data Format**: JSON
+
+**Description:**
+This endpoint will add/remove tags to a specified resource.
+It requires the resource ID, an array of all the category IDs to add, and an array of all the
+category IDs to remove.
+
+
+
+**Example Request:** /resourcetracker/tags
+
+                     form-data: (id: 3, add: [1, 2], remove: [3])
+
+**Example Response:**
+
+```
+"Successfully updated resources."
+```
+
+**Error Handling:**
+If missing necessary resource ID, add, or remove parameters, will output 400 invalid request.
+
+If resource ID provided or category IDs provided are invalid, will output 400 invalid request.
+
 
 ## Categories Endpoints
 
