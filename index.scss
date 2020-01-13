@@ -1,0 +1,50 @@
+// IF CHANGES ARE MADE TO CUSTOM.SCSS,
+// TODO: RE-COMPILE USING NPM
+@import url('https://fonts.googleapis.com/css?family=Encode+Sans:400,900');
+@import url('https://fonts.googleapis.com/css?family=Open+Sans');
+
+main {
+   display: flex;
+   justify-content: center;
+   flex-wrap: wrap;
+}
+
+body {
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+}
+
+.resource {
+   display: flex;
+   justify-content: center;
+   align-items: center;
+   flex-direction: column;
+}
+
+.resource p {
+   text-align: center;
+}
+
+.active {
+   background-color: #4B2E83 !important;
+}
+
+$theme-colors: (
+  "gold": #e8e3d3,
+  "husky": #4b2e83,
+  "metalgold": #85754d,
+  "remove": #E36F7A,
+  "oopsy": #D0F4EA,
+  "huskylight": #8350E5
+);
+
+a {
+  cursor: pointer;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@import "node_modules/bootstrap/scss/bootstrap";
