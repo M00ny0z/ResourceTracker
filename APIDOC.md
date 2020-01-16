@@ -102,12 +102,14 @@ parameter of categories
       "id": "1",
       "name": "UWT Food Bank",
       "link": "https://www.tacoma.uw.edu/thepantry",
+      "description": "Free food for students",
       "icon": "fa-food"
     },
     {
         "id": "3",
         "name": "Huscii",
         "link": "www.google.com",
+        "description": "Free coding for students",
         "icon": "fa-icon"
     }
 ]
