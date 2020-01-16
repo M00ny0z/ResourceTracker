@@ -1,14 +1,45 @@
+/*
+  Name: Manny Munoz
+  Date: 01.14.19
+
+  This is the index.scss file for ResourceTracker website. It provides consistent style and look
+  for the page.
+*/
 // IF CHANGES ARE MADE TO CUSTOM.SCSS,
-// TODO: RE-COMPILE USING NPM
+// RE-COMPILE USING NPM
 @import url('https://fonts.googleapis.com/css?family=Encode+Sans:400,900');
 @import url('https://fonts.googleapis.com/css?family=Open+Sans');
+
+.primary {
+   color: #4b2e83;
+}
+
+.secondary {
+   color: #85754d;
+}
+
+.tertiary {
+   color: #808080;
+}
 
 main {
    width: 80%;
    display: flex !important;
-   justify-content: space-around;
-   align-items: space-around;
+   align-items: center;
+   justify-content: center;
+   flex-direction: column;
+}
+
+main section {
+   display: flex !important;
+   align-items: center;
    flex-wrap: wrap;
+   justify-content: space-around;
+}
+
+img {
+   width: 18rem;
+   height: 9rem;
 }
 
 body {
@@ -22,6 +53,14 @@ body {
    justify-content: center;
    align-items: center;
    flex-direction: column;
+}
+
+ul {
+   width: 100%;
+}
+
+li {
+   border-width: thick !important;
 }
 
 .resource p {
@@ -40,6 +79,11 @@ $theme-colors: (
   "oopsy": #D0F4EA,
   "huskylight": #8350E5
 );
+
+button a {
+   color: white !important;
+   text-decoration: none;
+}
 
 a {
   cursor: pointer;

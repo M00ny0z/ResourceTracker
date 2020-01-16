@@ -101,15 +101,13 @@ parameter of categories
     {
       "id": "1",
       "name": "UWT Food Bank",
-      "link": "www.google.com",
-      "description": "Food bank all students have access to",
+      "link": "https://www.tacoma.uw.edu/thepantry",
       "icon": "fa-food"
     },
     {
         "id": "3",
         "name": "Huscii",
         "link": "www.google.com",
-        "description": "Coding group",
         "icon": "fa-icon"
     }
 ]
