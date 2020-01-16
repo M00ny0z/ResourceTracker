@@ -88,14 +88,7 @@ if ($path === "resources") {
          }
          // IF THEY PROVIDED A RESOURCE ID
          $resource_id = $uri[4];
-         if ($method === "GET") {
-            try {
-               header("Content-type: text/html");
-               echo("getting specific resource page.");
-            } catch (PDOException $ex) {
-               db_error();
-            }
-         } else if ($method === "DELETE") {
+         if ($method === "DELETE") {
             try {
                $db = get_PDO();
                if (is_admin($db, $user)) {
