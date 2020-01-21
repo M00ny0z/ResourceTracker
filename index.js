@@ -131,8 +131,15 @@
    }
 
    /**
-    * Adds an error alert message to a specified parent element
-    * @param {HTMLDOM} parent - The parent element to add the alert to
+    * Adds an success alert message to the page
+    * @param {String} message - The message of the alert
+    */
+   function displaySuccess(message) {
+      displayMessage(message, "success");
+   }
+
+   /**
+    * Adds an error alert message to the page
     * @param {String} message - The message of the alert
     */
    function displayError(message) {
