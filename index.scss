@@ -10,6 +10,16 @@
 @import url('https://fonts.googleapis.com/css?family=Encode+Sans:400,900');
 @import url('https://fonts.googleapis.com/css?family=Open+Sans');
 
+form label {
+   display: flex;
+}
+
+.form-check {
+   display: flex !important;
+   flex-flow: column;
+
+}
+
 .primary {
    color: #4b2e83;
 }
