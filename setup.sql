@@ -1,3 +1,11 @@
+/*
+ *  Name: Manny Munoz
+ *  Date: 01.14.19
+ *  This is the setup sql file for the ResourceTracker database
+ *  It creates all the tables to track resources, resource tags, those who are blocked from
+ *  uploading, and resource categories.
+ */
+DROP TABLE IF EXISTS access;
 DROP TABLE IF EXISTS tag;
 DROP TABLE IF EXISTS resource;
 DROP TABLE IF EXISTS category;
@@ -35,6 +43,11 @@ CREATE TABLE blocked(
    PRIMARY KEY(netid)
 );
 
+CREATE TABLE access(
+   code VARCHAR(6) NOT NULL,
+   PRIMARY KEY(code)
+);
+
 -- DATA USED FOR TESTING
 INSERT INTO category(name) VALUES
 ("Housing"),
@@ -42,8 +55,8 @@ INSERT INTO category(name) VALUES
 ("Academic");
 
 INSERT INTO resource(name, link, description, icon, user) VALUES
-("KOZ", "www.koz.com", "cheap apartments for students.", "fa-icon", "em66@uw.edu"),
-("Pantry", "www.pantry.com", "free food for students", "fa-food", "em66@uw.edu"),
-("Tacoma Learning Center", "www.tlc.com", "free tutoring for UWT students", "fa-study", "em66@uw.edu");
+("KOZ Apartments", "https://www.kozonmarket.com/", "cheap apartments for students.", "building", "em66@uw.edu"),
+("UWT Pantry", "https://www.tacoma.uw.edu/thepantry", "free food for students", "utensils", "em66@uw.edu"),
+("Tacoma Learning Center", "https://www.tacoma.uw.edu/teaching-learning-center/teaching-learning-center", "free tutoring for UWT students", "fa-study", "em66@uw.edu");
 
 INSERT INTO tag VALUES (2, 2);
