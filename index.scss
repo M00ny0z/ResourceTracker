@@ -10,8 +10,17 @@
 @import url('https://fonts.googleapis.com/css?family=Encode+Sans:400,900');
 @import url('https://fonts.googleapis.com/css?family=Open+Sans');
 
+#category-container {
+   margin-top: 1rem;
+   margin-bottom: 1rem;
+}
+
 form label {
    display: flex;
+}
+
+form {
+   width: 80%;
 }
 
 .form-check {
