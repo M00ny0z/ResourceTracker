@@ -13,12 +13,11 @@ If a database error has occurred in ANY endpoint, the following will be returned
 
 ## Table of Contents
 [Resources](#resources-endpoints)
-1. [resources/:id](#resources/:id)
-2. [resources?categories=](#resources?categories=)
-3. [resources/approve/:id](#resources/approve/:id)
-4. [resources/standby/:id](#resources/standby/:id)
-5. [resources/admin](#resources/admin)
-6. [resources/tag](#resources/tag)
+1. [resources?categories=](#resources?categories=)
+2. [resources/approve/:id](#resources/approve/:id)
+3. [resources/standby/:id](#resources/standby/:id)
+4. [resources/admin](#resources/admin)
+5. [resources/tag](#resources/tag)
 
 
 [Categories](#categories)
@@ -30,29 +29,6 @@ If a database error has occurred in ANY endpoint, the following will be returned
 2. [user/unblock/:netid](#user/unblock/:netid)
 
 ## Resources Endpoints
-
-### *resources/:id*
-**Request Format:** /resourcetracker/resources/:id
-
-**Request Type:** GET
-
-**Returned Data Format**: HTML
-
-**Description:**
-This endpoint will retrieve for you the specific information page for a resource of the specified
-ID.
-
-
-**Example Request:** /resourcetracker/resources/5
-
-**Example Response:**
-
-```html
-
-```
-
-**Error Handling:**
-Will output a 400 error if the provided resourceID is not valid.
 
 ### *resources/:id*
 **Request Format:** /resourcetracker/resources/:id
