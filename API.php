@@ -1,248 +1,469 @@
 <?php
 include("common.php");
-$uri = explode("/", parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH));
-$path = strtolower($uri[3]);
-$method = $_SERVER["REQUEST_METHOD"];
+include("request.php");
+$uri = parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH);
+$uri = substr($uri, strpos($uri, "test.php/"));
+$uri = substr($uri, strpos($uri, "/") + 1);
+$main = $uri;
+$uri = explode("/", $uri);
 $user = "em66@uw.edu";
 
-if ($path === "resources") {
-   // IF THEY PROVIDED AN ID
-   if (isset($uri[4]) && $uri[4] != "") {
-      $action = $uri[4];
-      if ($action === "approve" || $action === "standby" || $action === "admin" ||
-          $action === "tag") {
-         $db = get_PDO();
-         if (is_admin($db, $user)) {
-            if ($method === "PUT") {
-               $resource_id = $uri[5];
-               if ($action === "approve") {
-                  try {
-                     $outcome = update_resource_status($db, $resource_id, APPROVE);
-                     if ($outcome) {
-                        success("Successfully approved resource.");
-                     } else {
-                        invalid_request(RESOURCE_UPDATE_ERROR);
-                     }
-                  } catch (PDOException $ex) {
-                     db_error();
-                  }
-               } else if ($action === "standby") {
-                  try {
-                     $outcome = update_resource_status($db, $resource_id, STANDBY);
-                     if ($outcome) {
-                        success("Successfully put resource on standby.");
-                     } else {
-                        invalid_request(RESOURCE_UPDATE_ERROR);
-                     }
-                  } catch (PDOException $ex) {
-                     db_error();
-                  }
-               } else {
-                  invalid_request(OPERATION_ERROR);
-               }
-            } else if ($method === "GET") {
-               if ($action === "admin") {
-                  try {
-                     $data = get_all_resources($db);
-                     header("Content-type: application/json");
-                     echo(json_encode($data));
-                  } catch (PDOException $ex) {
-                     db_error();
-                  }
-               }
-            } else if ($method === "POST") {
-               if ($action === "tag") {
-                  if (isset($_POST["id"]) && isset($_POST["add"]) && isset($_POST["remove"])) {
-                     try {
-                        $id = $_POST["id"];
-                        $categories_to_add = $_POST["add"];
-                        $categories_to_remove = $_POST["remove"];
-                        $outcome = true;
-                        if (count($categories_to_add) > 0) {
-                           $outcome = $outcome && add_tags($db, $id, $categories_to_add);
-                        }
-                        if (count($categories_to_remove) > 0) {
-                           $outcome = $outcome && remove_tags($db, $id, $categories_to_remove);
-                        }
-                        if ($outcome) {
-                           success("Successfully updated resource tags.");
-                        } else {
-                           invalid_request("Please make sure that the resource ID and category " .
-                                           "IDs provided are valid.");
-                        }
-                     } catch (PDOException $ex) {
-                        db_error();
-                     }
-                  } else {
-                     invalid_request("I need a valid ID, add, and remove values. Please see " .
-                                     "the documentation for more information.");
-                  }
-               } else {
-                  invalid_request(OPERATION_ERROR);
-               }
-            } else {
-               invalid_request(OPERATION_ERROR);
-            }
+$endpoint_map = new RequestMap();
+$method = $_SERVER["REQUEST_METHOD"];
+
+build_endpoint_map($endpoint_map);
+
+try {
+   call_user_func($endpoint_map->get($main, $method), $uri, $user);
+} catch(Exception $e) {
+   invalid_request($e);
+}
+
+/**
+  * Parses through the body data and stores the key-value pairs
+  * NOTE: NO KEY OR VALUE CAN HAVE A NAME OF 'name'
+  * @param {String} data - The body data in one string
+  * @return {String[]} - An associative array, the key-values being the body-data key-value
+  *                      pairs
+*/
+function parse_body_data($data) {
+   $output = array();
+   while(strlen($data) > 0 && strpos($data, "name=")) {
+      $data = substr($data, strpos($data, "="));
+      $key = substr($data, 2);
+      $key = substr($key, 0, strpos($key, "\""));
+      $data = substr($data, strpos($data, "\n") + 3);
+      $value = substr($data, 0, strpos($data, "\n"));
+      $data = substr($data, strpos($data, "\n"));
+      $output[$key] = $value;
+   }
+   return $output;
+}
+
+/**
+  * Creates all of the endpoint to valid request methods and their specified function mappings
+*/
+function build_endpoint_map($map) {
+   $map->put("(resources\/\d+$)", array("PUT" => 'approve_resource_request'));
+   $map->put("(resources\/admin$)", array("GET" => 'get_all_resources_request'));
+   $map->put("(resources\/tags$)", array("PUT" => 'update_resource_tags_request'));
+   $map->put("(resources\/\d+\/status\/(APPROVED)$)", array("PUT" => 'approve_resource_request'));
+   $map->put("(resources\/\d+\/status\/(STANDBY)$)", array("PUT" => 'standby_resource_request'));
+   $map->put("((resources\/\?*(categories\[\]=\d)*(&categories\[\]=\d)*$))",
+                array("GET" => 'get_resources_request'));
+   $map->put("(resources\/\d+\/expire\/20[2-3]\d-(0[1-9]|1[0-2])-([0-2][0-9]|3[0-1])$)",
+                array("PUT" => 'resource_expire_request'));
+
+   $map->put("(categories$)", array("GET" => 'get_categories_request',
+                                    "POST" => 'add_category_request'));
+
+   $map->put("(categories\/\d+$)", array("DELETE" => 'remove_category_request'));
+   $map->put("(categories\/\d+\/status\/APPROVE$)", array("PUT" => 'approve_category_request'));
+
+   $map->put("(users\/([a-z]|[A-Z]|\d)+\/access\/BLOCK$)", array("PUT" => 'block_user_request'));
+   $map->put("(users\/([a-z]|[A-Z]|\d)+\/access\/UNBLOCK$)", array("PUT" => 'unblock_user_request'));
+}
+
+/**
+  * Verifies the inputs required to approve a new resource
+  * Must have provided a resourceID and it must be valid and not have been already approved
+  * THROWS PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * IF ALL REQUIRED INPUTS ARE NOT PROVIDED, SENDS INVALID REQUEST
+*/
+function approve_resource_request($uri, $user) {
+   $db = get_PDO();
+   if (isset($uri[0]) && is_valid_resource_id($db, $uri[0])) {
+      $resource_id = $uri[0];
+      try {
+         $outcome = update_resource_status($db, $resource_id, APPROVE);
+         if ($outcome) {
+            success("Successfully approved resource.");
          } else {
-            invalid_request(ADMIN_ERROR);
+            invalid_request(RESOURCE_UPDATE_ERROR);
          }
-         // IF THEY PROVIDED A RESOURCE ID
-         $resource_id = $uri[4];
-         if ($method === "DELETE") {
-            try {
-               $db = get_PDO();
-               if (is_admin($db, $user)) {
-                  remove_resource($db, $resource_id);
-                  success("Successfully deleted resource.");
-               } else {
-                  invalid_request(ADMIN_ERROR);
-               }
-            } catch(PDOException $ex) {
-               db_error();
-            }
-         }
+      } catch (PDOException $ex) {
+         db_error();
       }
    } else {
-      if ($method === "GET") {
-         try {
-            $db = get_PDO();
-            $data;
-            if (isset($_GET["categories"])) {
-               $data = get_approved_resources($db, $_GET["categories"]);
-            } else {
-               $data = get_approved_resources($db);
-            }
-            header("Content-type: application/json");
-            echo(json_encode($data));
-         } catch (PDOException $ex) {
-            db_error();
-         }
-      } else if ($method === "POST") {
-         if (isset($_POST["name"]) && isset($_POST["link"]) && isset($_POST["desc"]) &&
-            isset($_POST["icon"])) {
-            $name = $_POST["name"];
-            $link = $_POST["link"];
-            $desc = $_POST["desc"];
-            $icon = $_POST["icon"];
-            if (verify_resource_info($name, $link, $desc, $icon, $tags)) {
-               try {
-                  $db = get_PDO();
-                  add_resource($db, $name, $link, $desc, $icon, $user);
-                  if (isset($_POST["tags"])) {
-                     add_tags($db, $db->lastInsertId(), $_POST["tags"]);
-                  }
-                  success("Successfully added resource.");
-               } catch (PDOException $ex) {
-                  db_error($ex);
-               }
-            } else {
-               invalid_request(RESOURCE_VALID_ERROR);
-            }
-         } else {
-            invalid_request(RESOURCE_VALID_ERROR);
-         }
-      }
+      invalid_request("I need a valid resource ID for this operation on this endpoint.");
    }
-} else if ($path === "categories") {
-   if ($method === "DELETE") {
+}
+
+/**
+  * Verifies the inputs required to standby a new resource
+  * Must have provided a resourceID and it must be valid and not have been already put on standby
+  * THROWS PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * IF ALL REQUIRED INPUTS ARE NOT PROVIDED, SENDS INVALID REQUEST
+*/
+function standby_resource_request($uri, $user) {
+   $db = get_PDO();
+   if (isset($uri[0]) && is_valid_resource_id($db, $uri[0])) {
+      $resource_id = $uri[0];
       try {
-         $db = get_PDO();
-         if (is_admin($db, $user)) {
-            if (isset($uri[4]) && $uri[4] != "") {
-               $category = $uri[4];
-               remove_category($db, $category);
-               success("Successfully removed category.");
-            } else {
-               invalid_request("A valid category ID is required.");
-            }
+         $outcome = update_resource_status($db, $resource_id, STANDBY);
+         if ($outcome) {
+            success("Successfully put resource on standby.");
          } else {
-            invalid_request(ADMIN_ERROR);
+            invalid_request(RESOURCE_UPDATE_ERROR);
          }
       } catch (PDOException $ex) {
          db_error();
       }
-   } else if ($method === "POST") {
+   } else {
+      invalid_request("I need a valid resource ID for this operation on this endpoint.");
+   }
+}
+
+/**
+  * Handles the request to retrieve all resources
+  * Must be an admin
+  * @param {String[]} $uri - The array of strings
+  * THROWS PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * IF NOT AN ADMIN, SENDS INVALID REQUEST
+*/
+function get_all_resources_request($uri, $user) {
+   $db = get_PDO();
+   if (is_admin($db, $user)) {
       try {
-         $db = get_PDO();
-         if (is_admin($db, $user)) {
-            if (isset($_POST["name"])) {
-               add_category($db, $_POST["name"]);
-               success("Successfully added new category.");
-            } else {
-               invalid_request("I need a valid name to insert.");
-            }
-         } else {
-            invalid_request(ADMIN_ERROR);
-         }
-      } catch (PDOException $ex) {
-         db_error();
-      }
-   } else if ($method === "GET") {
-      try {
-         $db = get_PDO();
-         $data = get_categories($db);
+         $data = get_all_resources($db);
          header("Content-type: application/json");
          echo(json_encode($data));
       } catch (PDOException $ex) {
          db_error();
       }
    } else {
-      invalid_request(OPERATION_ERROR);
+      invalid_request("You need to be an admin to access this resource.");
    }
-} else if ($path === "users") {
-   if (isset($uri[4]) && $uri[4] != "") {
-      $action = $uri[4];
-      if (isset($uri[5]) && $uri[5] != "") {
-         $netid = $uri[5];
-         if ($method === "POST") {
-            if ($action === "block") {
-               try {
-                  $db = get_PDO();
-                  if (is_admin($db, $user)) {
-                     block_netid($db, $netid);
-                     success("Successfully blocked netid.");
-                  } else {
-                     invalid_request(ADMIN_ERROR);
-                  }
-               } catch (PDOException $ex) {
-                  if ($ex->getCode() === "23000") {
-                     invalid_request("Please make sure netid is not already blocked.");
-                  } else {
-                     db_error();
-                  }
-               }
-            } else if ($action === "unblock") {
-               try {
-                  $db = get_PDO();
-                  if (is_admin($db, $user)) {
-                     $outcome = unblock_netid($db, $netid);
-                     if ($outcome) {
-                        success("Successfully unblocked netid.");
-                     } else {
-                        invalid_request("Please make sure netid has not already been unblocked.");
-                     }
-                  } else {
-                     invalid_request(ADMIN_ERROR);
-                  }
-               } catch (PDOException $ex) {
-                  db_error();
-               }
-            } else {
-               invalid_request(OPERATION_ERROR);
+}
+
+/**
+  * Handles the request to update the associated tags of a resource
+  * Must be an admin
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+  * @param {PUT} $id - The resource_ID to update tags for
+  * @param {PUT} $add - The tags to add to the resource
+  * @param {PUT} $remove - The tags to remove from the resource
+  * THROWS PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * IF NOT AN ADMIN, SENDS INVALID REQUEST
+*/
+function update_resource_tags_request($uri, $user) {
+   $_PUT = parse_body_data(file_get_contents("php://input"));
+   $db = get_PDO();
+   if (is_admin($db, $user)) {
+      if (isset($_PUT["id"]) && (isset($_PUT["add"]) || isset($_PUT["remove"]))) {
+         try {
+            $resource_id = $_PUT["id"];
+            $categories_to_add = array();
+            $categories_to_remove = array();
+            if (isset($_PUT["add"])) {
+               $categories_to_add = json_decode($_PUT["add"]);
             }
-         } else {
-            invalid_request(OPERATION_ERROR);
+            if (isset($_PUT["remove"])) {
+               $categories_to_remove = json_decode($_PUT["remove"]);
+            }
+
+            $outcome = true;
+            if (!empty($categories_to_add)) {
+               $outcome = $outcome && add_tags($db, $resource_id, $categories_to_add);
+            }
+            if (!empty($categories_to_remove)) {
+               $outcome = $outcome && remove_tags($db, $resource_id, $categories_to_remove);
+            }
+
+            if ($outcome) {
+               success("Successfully updated resource tags.");
+            } else {
+               invalid_request("Please make sure that the resource ID and category " .
+                               "IDs provided are valid.");
+            }
+         } catch (PDOException $ex) {
+            db_error($ex);
          }
       } else {
-         invalid_request("I need a valid netid for these actions.");
+         invalid_request("I need a valid ID, add, and remove values. Please see " .
+                         "the documentation for more information.");
       }
    } else {
-      invalid_request("I need a valid action of either block or unblock.");
+      invalid_request("You must be an admin to utilize this endpoint.");
+   }
+}
+
+/**
+  * Handles the request to add a new resource to the database
+  * Resource added is put on standby
+  * Must be an admin to use
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+  * @param {POST} name - The name of the resource
+  * @param {POST} link - The link to the resource
+  * @param {POST} description - The description of the resource
+  * @param {POST} icon - The icon of the resource
+  * @param {POST} tags - The associated tags for the resource IF APPLICABLE
+*/
+function add_resource_request($uri, $user) {
+   $db = get_PDO();
+   if (is_admin($db, $user)) {
+      if (isset($_POST["name"]) && isset($_POST["link"]) && isset($_POST["desc"]) &&
+         isset($_POST["icon"])) {
+         $name = $_POST["name"];
+         $link = $_POST["link"];
+         $desc = $_POST["desc"];
+         $icon = $_POST["icon"];
+         if (resource_info($name, $link, $desc, $icon)) {
+            try {
+               add_resource($db, $name, $link, $desc, $icon, $user);
+               if (isset($_POST["tags"])) {
+                  add_tags($db, $db->lastInsertId(), json_decode($_POST["tags"]));
+               }
+               success("Successfully added resource.");
+            } catch (PDOException $ex) {
+               db_error($ex);
+            }
+         } else {
+            invalid_request(RESOURCE_VALID_ERROR);
+         }
+      } else {
+         invalid_request(RESOURCE_VALID_ERROR);
+      }
+   }
+}
+
+/**
+  * Handles the request to remove a resource from the database
+  * Must be an admin to use
+  * Must have a URL parameter of the resourceID to remove
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+*/
+function remove_resource_request($uri, $user) {
+   $db = get_PDO();
+   if (is_admin($db, $user)) {
+      if (isset($uri[0]) && is_valid_resource_id($db, $uri[0])) {
+         try {
+            remove_resource($db, $resource_id);
+            success("Successfully deleted resource.");
+         } catch(PDOException $ex) {
+            db_error();
+         }
+      }
+   }
+}
+
+/**
+  * Handles the request to retrieve all of the approved resources from the database
+  * Has the option of a GET parameter of 'categories' to specify approved resources from only those
+  *    categories
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+  * @param {GET} categories - The resource categories to limit by
+*/
+function get_resources_request($uri, $user) {
+   try {
+      $db = get_PDO();
+      $data;
+      if (isset($_GET["categories"])) {
+         $data = get_approved_resources($db, $_GET["categories"]);
+      } else {
+         $data = get_approved_resources($db);
+      }
+      header("Content-type: application/json");
+      echo(json_encode($data));
+   } catch (PDOException $ex) {
+      db_error();
+   }
+}
+
+/**
+  * Handles the request to update/add an expiration date to a resource
+  * Expects a URL parameter of the resourceID and the date for it to expire
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+*/
+function resource_expire_request($uri, $user) {
+   $db = get_PDO();
+   if (is_admin($db, $user)) {
+      $resource_id = $uri[1];
+      $expire = $uri[3];
+      try {
+         $outcome = update_resource_expire($db, $resource_id, $expire);
+         if ($outcome) {
+            success("Successfully updated expiration date of resource.");
+         } else {
+            invalid_request("Please make sure the provided resource ID is valid and " .
+                            "the expiration date has not already been set to the provided value.");
+         }
+      } catch(PDOException $ex) {
+         db_error();
+      }
+   }
+}
+
+/**
+  * Queries the database to set the expiration date of a specified resourceID
+  * WILL THROW PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String/int} resource_id - The resourceID to update
+  * @param {String} expire - The date for the resource to expire
+  * @return {Boolean} - TRUE if a resource was updated, FALSE otherwise.
+*/
+function update_resource_expire($db, $resource_id, $expire) {
+   $query = "UPDATE resource SET expire = :expire WHERE id = :id;";
+   $stmt = $db->prepare($query);
+   $params = array("expire" => $expire,
+                   "id" => $resource_id);
+   $stmt->execute($params);
+   $result = $stmt->rowCount() > 0;
+   $stmt->closeCursor();
+   $stmt = null;
+   return $result;
+}
+
+/**
+  * Handles the request to retrieve all of the categories from the database
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+*/
+function get_categories_request($uri, $user) {
+   try {
+      $db = get_PDO();
+      $data = get_categories($db);
+      header("Content-type: application/json");
+      echo(json_encode($data));
+   } catch (PDOException $ex) {
+      db_error();
+   }
+}
+
+/**
+  * Handles the request to add a new category
+  * If the user is not an admin, makes the category unapproved
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+  * @param {POST} name - The category name to add
+*/
+function add_category_request($uri, $user) {
+   try {
+      $db = get_PDO();
+      if (isset($_POST["name"])) {
+         add_category($db, $_POST["name"]);
+         if (is_admin($db, $user)) {
+            make_category_unapproved($db, $db->lastInsertId());
+         }
+         success("Successfully added new category.");
+      } else {
+         invalid_request("I need a valid name to insert.");
+      }
+   } catch (PDOException $ex) {
+      db_error();
+   }
+}
+
+function approve_category_request($uri, $user) {
+   try {
+      $db = get_PDO();
+      if (is_admin($db, $user)) {
+         $category_id = $uri[0];
+         approve_category($db, $category_id);
+         success("Successfully approved category.");
+      } else {
+         invalid_request(ADMIN_ERROR);
+      }
+   } catch (PDOException $ex) {
+      db_error();
+   }
+}
+
+/**
+  * Handles the request to remove a category from the database
+  * Must be an admin to use
+  * If
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+*/
+function remove_category_request($uri, $user) {
+   try {
+      $db = get_PDO();
+      if (is_admin($db, $user)) {
+         if (isset($uri[0]) && $uri[0] != "") {
+            $category = $uri[0];
+            remove_category($db, $category);
+            success("Successfully removed category.");
+         } else {
+            invalid_request("A valid category ID is required.");
+         }
+      } else {
+         invalid_request(ADMIN_ERROR);
+      }
+   } catch (PDOException $ex) {
+      db_error();
+   }
+}
+
+/**
+  * Handles the request to block a user from adding resources to the database
+  * Must be an admin to use
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+*/
+function block_user_request($uri, $user) {
+   try {
+      $db = get_PDO();
+      if (is_admin($db, $user)) {
+         block_netid($db, $uri[1]);
+         success("Successfully blocked netid.");
+      } else {
+         invalid_request(ADMIN_ERROR);
+      }
+   } catch (PDOException $ex) {
+      if ($ex->getCode() === "23000") {
+         invalid_request("Please make sure netid is not already blocked.");
+      } else {
+         db_error();
+      }
+   }
+}
+
+/**
+  * Handles the request to unblock a user from adding resources to the database
+  * Must be an admin to use
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+*/
+function unblock_user_request($uri, $user) {
+   try {
+      $db = get_PDO();
+      if (is_admin($db, $user)) {
+         unblock_netid($db, $uri[1]);
+         success("Successfully blocked netid.");
+      } else {
+         invalid_request(ADMIN_ERROR);
+      }
+   } catch (PDOException $ex) {
+      if ($ex->getCode() === "23000") {
+         invalid_request("Please make sure netid is not already unblocked.");
+      } else {
+         db_error();
+      }
    }
 }
 
 function is_admin($db, $netid) {
    return true;
+}
+
+function is_valid_resource_id($db, $id) {
+   return check_exists($db, "resource", "id", $id);
 }
 
 /**
@@ -287,7 +508,7 @@ function unblock_netid($db, $netid) {
   * @param {String} icon - The icon of the resource to verify
   * @return {Boolean} - TRUE if all provided values are valid, FALSE otherwise
 */
-function verify_resource_info($name, $link, $description, $icon, $tags) {
+function verify_resource_info($name, $link, $description, $icon) {
    return true;
 }
 
@@ -312,7 +533,7 @@ function get_all_resources($db) {
   * @return {JSON[]} - A JSON array, each item being a category which includes its name and ID
 */
 function get_categories($db) {
-   $query = "SELECT * FROM category;";
+   $query = "SELECT * FROM category WHERE id NOT IN (SELECT * FROM unapproved_category);";
    $data = $db->query($query)->fetchAll(PDO::FETCH_ASSOC);
    return $data;
 }
@@ -358,10 +579,42 @@ function remove_category_tags($db, $category) {
   * @param {String/int[]} categories - Each item should be a categoryID, should be at least one item
 */
 function remove_tags($db, $resource, $categories) {
-   $query = "DELETE FROM tag WHERE resource_id = :id AND category_id IN " .
+   $query = "DELETE FROM tag WHERE resource_id = ? AND category_id IN " .
             build_categories_string($categories);
    $stmt = $db->prepare($query);
    $stmt->execute(array_merge([$resource], $categories));
+   $result = $stmt->rowCount() > 0;
+   $stmt->closeCursor();
+   $stmt = null;
+   return $result;
+}
+
+/**
+  * Sets the status of a category to unapproved
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String/int} category_id - The category to unapprove
+  * @return {Boolean} - TRUE if unapproving the category was successful, FALSE otherwise
+*/
+function unapprove_category($db, $category_id) {
+   $query = "INSERT INTO unapproved_category VALUES (?);";
+   $stmt = $db->prepare($query);
+   $stmt->execute([$category_id]);
+   $result = $stmt->rowCount() > 0;
+   $stmt->closeCursor();
+   $stmt = null;
+   return $result;
+}
+
+/**
+  * Approves a category into the database
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String/int} category_id - The category to approve
+  * @return {Boolean} - TRUE if approving the category was successful, FALSE otherwise
+*/
+function approve_category($db, $category_id) {
+   $query = "DELETE FROM unapproved_category WHERE id = ?;";
+   $stmt = $db->prepare($query);
+   $stmt->execute([$category_id]);
    $result = $stmt->rowCount() > 0;
    $stmt->closeCursor();
    $stmt = null;
