@@ -2,7 +2,7 @@
 include("common.php");
 include("request.php");
 $uri = parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH);
-$uri = substr($uri, strpos($uri, "test.php/"));
+$uri = substr($uri, strpos($uri, "API.php/"));
 $uri = substr($uri, strpos($uri, "/") + 1);
 $main = $uri;
 $uri = explode("/", $uri);
@@ -12,7 +12,6 @@ $endpoint_map = new RequestMap();
 $method = $_SERVER["REQUEST_METHOD"];
 
 build_endpoint_map($endpoint_map);
-
 try {
    call_user_func($endpoint_map->get($main, $method), $uri, $user);
 } catch(Exception $e) {
@@ -46,7 +45,7 @@ function parse_body_data($data) {
 function build_endpoint_map($map) {
    $map->put("(resources$)", array("POST" => 'create_resource_request'));
    $map->put("(resources\/\d+$)", array("PUT" => 'approve_resource_request'));
-   $map->put("(resources\/admin$)", array("GET" => 'get_all_resources_request'));
+   $map->put("(resources\/admin(\/|)$)", array("GET" => 'get_all_resources_request'));
    $map->put("(resources\/tags$)", array("PUT" => 'update_resource_tags_request'));
    $map->put("(resources\/\d+\/status\/(APPROVED)$)", array("PUT" => 'approve_resource_request'));
    $map->put("(resources\/\d+\/status\/(STANDBY)$)", array("PUT" => 'standby_resource_request'));
@@ -222,8 +221,12 @@ function standby_resource_request($uri, $user) {
 function get_all_resources_request($uri, $user) {
    $db = get_PDO();
    if (is_admin($db, $user)) {
+      $name;
+      if (isset($_GET["name"])) {
+         $name = $_GET["name"];
+      }
       try {
-         $data = get_all_resources($db);
+         $data = get_all_resources($db, $name);
          header("Content-type: application/json");
          echo(json_encode($data));
       } catch (PDOException $ex) {
@@ -624,8 +627,11 @@ function verify_resource_info($name, $link, $description, $icon) {
   * @return {JSON[]} - A JSON array, each item being a resource which includes
   *                    its ID, name, link, description, icon, status, and user
 */
-function get_all_resources($db) {
-   $query = "SELECT * FROM resource;";
+function get_all_resources($db, $name="") {
+   $query = "SELECT * FROM resource ";
+   if ($name != "") {
+      $query = $query . "WHERE name LIKE '%{$name}%';";
+   }
    $data = $db->query($query)->fetchAll(PDO::FETCH_ASSOC);
    return $data;
 }
