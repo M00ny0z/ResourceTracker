@@ -14,19 +14,23 @@ If a database error has occurred in ANY endpoint, the following will be returned
 ## Table of Contents
 [Resources](#resources-endpoints)
 1. [resources?categories=](#resources?categories=)
-2. [resources/approve/:id](#resources/approve/:id)
-3. [resources/standby/:id](#resources/standby/:id)
+2. [resources/:id/status/APPROVE](#resources/approve/:id)
+3. [resources/:id/status/STANDBY](#resources/standby/:id)
 4. [resources/admin](#resources/admin)
 5. [resources/tag](#resources/tag)
+6. [resources/:id](#resources)
+7. [resources/:id/expire/:date](#resources/:id/expire/:date)
 
 
 [Categories](#categories)
 1. [categories/](#categories/)
 2. [categories/:name](#categories/:name)
+3. [categories/:id](#categories/:id)
+4. [categories/:id/APPROVE](#categories/:id/APPROVE)
 
 [User](#user)
-1. [user/block/:netid](#user/block/:netid)
-2. [user/unblock/:netid](#user/unblock/:netid)
+1. [user/:netid/access/BLOCK](#user/:netid/access/BLOCK)
+2. [user/:netid/access/UNBLOCK](#user/:netid/access/UNBLOCK)
 
 ## Resources Endpoints
 
@@ -97,7 +101,8 @@ No potential errors outside of database error.
 ### *resources*
 **Request Format:** /resourcetracker/resources
                    form-data: (name: {NAME}, link: {LINK TO RESOURCE}, desc: {RESOURCE DESCRIPTION}
-                               icon: {RESOURCE ICON}, tags: "[CATEGORY ID, ...]")
+                               icon: {RESOURCE ICON}, tags: "[CATEGORY ID, ...]",
+                               other: {SUGGESTED CATEGORY NAME})
 
 **Request Type:** POST
 
@@ -113,6 +118,8 @@ font should be from the "Free" section.
 
 It can take an optional parameter of "tags" which should be an array of category ID's to tag the
 resource under.
+
+It can also take an optional parameter of "other" which should there be a category that
 
 
 **Example Request:** /resourcetracker/resources
@@ -222,14 +229,14 @@ NOTE: You must be an admin to access this endpoint.
 No potential errors outside of database error.
 
 ### *resources/tag/*
-**Request Format:** /resourcetracker/tag
+**Request Format:** /resourcetracker/resources/tags
 
                     form-data: (id: {RESOURCE_ID}, add: [CATEGORY_ID, ...],
                                 remove: [CATEGORY_ID, ...])
 
-**Request Type:** POST
+**Request Type:** PUT
 
-**Returned Data Format**: JSON
+**Returned Data Format**: Plain Text
 
 **Description:**
 This endpoint will add/remove tags to a specified resource.
@@ -238,7 +245,7 @@ category IDs to remove.
 
 
 
-**Example Request:** /resourcetracker/tags
+**Example Request:** /resourcetracker/resources/tags
 
                      form-data: (id: 3, add: [1, 2], remove: [3])
 

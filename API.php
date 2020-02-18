@@ -44,6 +44,7 @@ function parse_body_data($data) {
   * Creates all of the endpoint to valid request methods and their specified function mappings
 */
 function build_endpoint_map($map) {
+   $map->put("(resources$)", array("POST" => 'create_resource_request'));
    $map->put("(resources\/\d+$)", array("PUT" => 'approve_resource_request'));
    $map->put("(resources\/admin$)", array("GET" => 'get_all_resources_request'));
    $map->put("(resources\/tags$)", array("PUT" => 'update_resource_tags_request'));
@@ -62,6 +63,103 @@ function build_endpoint_map($map) {
 
    $map->put("(users\/([a-z]|[A-Z]|\d)+\/access\/BLOCK$)", array("PUT" => 'block_user_request'));
    $map->put("(users\/([a-z]|[A-Z]|\d)+\/access\/UNBLOCK$)", array("PUT" => 'unblock_user_request'));
+}
+
+/**
+  * Handles the request to add a new resource to the database
+  * Resource added is put on standby
+  * Must be an admin to use
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+  * @param {POST} name - The name of the resource
+  * @param {POST} link - The link to the resource
+  * @param {POST} description - The description of the resource
+  * @param {POST} icon - The icon of the resource
+  * @param {POST} tags - The associated tags for the resource IF APPLICABLE
+  * @param {POST} categories - The custom categories to add to the database and to the resource
+  *                            IF APPLICABLE
+*/
+function create_resource_request($uri, $user) {
+   $db = get_PDO();
+   try {
+      if (isset($_POST["description"]) && isset($_POST["name"]) && isset($_POST["link"])
+         && isset($_POST["icon"])) {
+         $name = $_POST["name"];
+         $desc = $_POST["description"];
+         $link = $_POST["link"];
+         $icon = $_POST["icon"];
+         add_resource($db, $name, $link, $desc, $icon, $user);
+         $resource_id = $db->lastInsertId();
+         if (isset($_POST["expire"])) {
+            add_expire_to_resource($db, $resource_id, $_POST["expire"]);
+         }
+
+         if (isset($_POST["tags"])) {
+            add_tags($db, $resource_id, $_POST["tags"]);
+         }
+
+         if (isset($_POST["categories"])) {
+            add_categories($db, $_POST["categories"], $resource_id);
+         }
+
+         success("Successfully added resource.");
+      } else {
+         invalid_request("I need a valid resource name, link, description, icon, and any tags.");
+      }
+   } catch (PDOException $ex) {
+      db_error($ex);
+   }
+}
+
+/**
+  * Adds an expiration date to the resource
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String/int} resource_id - The ID of the resource
+  * @param {String} expire - The expiration date of resource
+  * @return {Boolean} - TRUE if a resource was updated with an expiration date, FALSE otherwise
+*/
+function add_expire_to_resource($db, $resource_id, $expire) {
+   $query = "UPDATE resource SET expire = :expire WHERE id = :id";
+   $stmt = $db->prepare($query);
+   $params = array("expire" => $expire,
+                   "id" => $resource_id);
+   $stmt->execute($params);
+   $result = $stmt->rowCount() > 0;
+   $stmt->closeCursor();
+   $stmt = null;
+   return $result;
+}
+
+/**
+  * Adds a list of categories to the database and makes them unnapproved
+  * Also tags the categories to the resource
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String[]} categories - The categories to add the database
+*/
+function add_categories($db, $categories, $resource_id) {
+   $categories_added = array();
+   for ($i = 0; $i < count($categories); $i++) {
+      $query = "INSERT INTO category(name) SELECT :category";
+      $stmt = $db->prepare($query);
+      $stmt->execute(["category" => $categories[$i]]);
+      array_push($categories_added, $db->lastInsertId());
+   }
+
+   $unapprove_query = "INSERT INTO unapproved_category VALUES ";
+   $unapprove_query = $unapprove_query . "(?) ";
+   for ($i = 1; $i < count($categories_added); $i++) {
+      $unapprove_query = $unapprove_query . ", (?)";
+   }
+   $stmt = $db->prepare($unapprove_query);
+   $stmt->execute($categories_added);
+
+   $tags_query = "INSERT INTO tag VALUES (?, {$resource_id}) ";
+   for ($i = 1; $i < count($categories_added); $i++) {
+      $tags_query = $tags_query . ", (?, {$resource_id})";
+   }
+   $stmt = $db->prepare($tags_query);
+   $stmt->execute($categories_added);
 }
 
 /**
@@ -366,6 +464,13 @@ function add_category_request($uri, $user) {
    }
 }
 
+/**
+  * Handles the request to approve a new category
+  * If the user is not an admin, makes the category unapproved
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+*/
 function approve_category_request($uri, $user) {
    try {
       $db = get_PDO();
