@@ -44,7 +44,8 @@ function parse_body_data($data) {
 */
 function build_endpoint_map($map) {
    $map->put("(resources$)", array("POST" => 'create_resource_request'));
-   $map->put("(resources\/\d+$)", array("PUT" => 'approve_resource_request'));
+   $map->put("(resources\/\d+$)", array("PUT" => 'approve_resource_request',
+                                        "DELETE" => 'remove_resource_request'));
    $map->put("(resources\/admin(\/|)$)", array("GET" => 'get_all_resources_request'));
    $map->put("(resources\/tags$)", array("PUT" => 'update_resource_tags_request'));
    $map->put("(resources\/\d+\/status\/(APPROVED)$)", array("PUT" => 'approve_resource_request'));
@@ -169,8 +170,8 @@ function add_categories($db, $categories, $resource_id) {
 */
 function approve_resource_request($uri, $user) {
    $db = get_PDO();
-   if (isset($uri[0]) && is_valid_resource_id($db, $uri[0])) {
-      $resource_id = $uri[0];
+   if (isset($uri[1]) && is_valid_resource_id($db, $uri[1])) {
+      $resource_id = $uri[1];
       try {
          $outcome = update_resource_status($db, $resource_id, APPROVE);
          if ($outcome) {
@@ -182,7 +183,7 @@ function approve_resource_request($uri, $user) {
          db_error();
       }
    } else {
-      invalid_request("I need a valid resource ID for this operation on this endpoint.");
+      invalid_request(RESOURCE_ID_ERROR);
    }
 }
 
@@ -194,8 +195,8 @@ function approve_resource_request($uri, $user) {
 */
 function standby_resource_request($uri, $user) {
    $db = get_PDO();
-   if (isset($uri[0]) && is_valid_resource_id($db, $uri[0])) {
-      $resource_id = $uri[0];
+   if (isset($uri[1]) && is_valid_resource_id($db, $uri[1])) {
+      $resource_id = $uri[1];
       try {
          $outcome = update_resource_status($db, $resource_id, STANDBY);
          if ($outcome) {
@@ -207,7 +208,7 @@ function standby_resource_request($uri, $user) {
          db_error();
       }
    } else {
-      invalid_request("I need a valid resource ID for this operation on this endpoint.");
+      invalid_request(RESOURCE_ID_ERROR);
    }
 }
 
@@ -221,7 +222,7 @@ function standby_resource_request($uri, $user) {
 function get_all_resources_request($uri, $user) {
    $db = get_PDO();
    if (is_admin($db, $user)) {
-      $name;
+      $name ="";
       if (isset($_GET["name"])) {
          $name = $_GET["name"];
       }
@@ -233,7 +234,7 @@ function get_all_resources_request($uri, $user) {
          db_error();
       }
    } else {
-      invalid_request("You need to be an admin to access this resource.");
+      invalid_request(ADMIN_ERROR);
    }
 }
 
@@ -287,7 +288,7 @@ function update_resource_tags_request($uri, $user) {
                          "the documentation for more information.");
       }
    } else {
-      invalid_request("You must be an admin to utilize this endpoint.");
+      invalid_request(ADMIN_ERROR);
    }
 }
 
@@ -329,6 +330,8 @@ function add_resource_request($uri, $user) {
       } else {
          invalid_request(RESOURCE_VALID_ERROR);
       }
+   } else {
+      invalid_request(ADMIN_ERROR);
    }
 }
 
@@ -343,14 +346,20 @@ function add_resource_request($uri, $user) {
 function remove_resource_request($uri, $user) {
    $db = get_PDO();
    if (is_admin($db, $user)) {
-      if (isset($uri[0]) && is_valid_resource_id($db, $uri[0])) {
+      if (isset($uri[1]) && is_valid_resource_id($db, $uri[1])) {
+         $resource_id = $uri[1];
          try {
+            remove_resource_tags($db, $resource_id);
             remove_resource($db, $resource_id);
             success("Successfully deleted resource.");
          } catch(PDOException $ex) {
-            db_error();
+            db_error($ex);
          }
+      } else {
+         invalid_request(RESOURCE_ID_ERROR);
       }
+   } else {
+      invalid_request(ADMIN_ERROR);
    }
 }
 
@@ -402,6 +411,8 @@ function resource_expire_request($uri, $user) {
       } catch(PDOException $ex) {
          db_error();
       }
+   } else {
+      invalid_request(ADMIN_ERROR);
    }
 }
 
@@ -694,6 +705,16 @@ function remove_tags($db, $resource, $categories) {
             build_categories_string($categories);
    $stmt = $db->prepare($query);
    $stmt->execute(array_merge([$resource], $categories));
+   $result = $stmt->rowCount() > 0;
+   $stmt->closeCursor();
+   $stmt = null;
+   return $result;
+}
+
+function remove_resource_tags($db, $resource) {
+   $query = "DELETE FROM tag WHERE resource_id = ?";
+   $stmt = $db->prepare($query);
+   $stmt->execute([$resource]);
    $result = $stmt->rowCount() > 0;
    $stmt->closeCursor();
    $stmt = null;
