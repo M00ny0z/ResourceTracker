@@ -1,21 +1,164 @@
+/**
+* This is the JS file for the admin view of ResourceTracker, it provides functionality to the
+* administrator HTML page such as adding/removing/editing resources and resource categories.
+* Author: Emmanuel Munoz
+*/
+"use strict";
 (function() {
    window.addEventListener("load", main);
    const API = "API.php/";
    const APPROVED = "APPROVED";
    const STANDBY = "STANDBY";
 
+   let categories;
+   let selectedCategories;
+   let currentlyActiveCats;
+   let currentResource;
+
+   /**
+    * Makes the initial request for all the resources and adds all event listeners
+    */
    function main() {
+      selectedCategories = [];
       fetchAllResources();
+      const queryBtn = id("query-btn");
+      queryBtn.addEventListener("click", searchByName);
+      const updateResourceBtn = id("update-resource-btn");
+      updateResourceBtn.addEventListener("click", submitResourceUpdate);
+      $(function () {
+        $('[data-toggle="tooltip"]').tooltip();
+      });
+      $(function () {
+         $('#expire-picker').datetimepicker({
+            format: 'YYYY-MM-DD'
+         });
+      });
+      fetchCategories();
    }
 
+   /**
+    * Makes a fetch PUT request to the update the informaton of a resource
+    */
+   function submitResourceUpdate() {
+      const data = removeEmptyData(new FormData(id("resource-modal").querySelector("form")));
+      const currentCategories = getSelectedTags();
+      const add = arrayDifference(currentCategories, currentlyActiveCats);
+      const remove = arrayDifference(currentlyActiveCats, currentCategories);
+      data.append("add", JSON.stringify(add));
+      data.append("remove", JSON.stringify(remove));
+      $('#resource-modal').modal('hide');
+
+      fetch(API + "resources/" + currentResource, {method: "PUT", body: data})
+         .then(checkStatus)
+         .then(displaySuccess)
+         .catch(displayError);
+   }
+
+   function removeEmptyData(form) {
+      const attributes = ["name", "icon", "link", "description", "expire"];
+      for (const attribute of attributes) {
+         if (form.get(attribute) === "" || form.get(attribute) === " ") {
+            form.delete(attribute);
+         }
+      }
+      return form;
+   }
+
+   function getSelectedTags() {
+      const output = [];
+      const currentlySelectedTags = qsa(".selected");
+      for (const categoryEle of currentlySelectedTags) {
+         output.push(categoryEle.id.split("-")[1]);
+      }
+      return output;
+   }
+
+   /**
+    * Makes a fetch GET request to retrieve all of the current categories
+    */
+   function fetchCategories() {
+      fetch(API + "categories")
+         .then(checkStatus)
+         .then(JSON.parse)
+         .then(function(data) {
+            categories = data;
+            displayCategories(data);
+         })
+         .catch(displayError);
+   }
+
+   /**
+    * Displays all of the category data to the page
+    * @param {JSON[]} categoryData - Each item containing {id:
+    *                                                      name:}
+    */
+   function displayCategories(categoryData) {
+      let categoryCont = id("category-cont");
+      categoryCont.innerHTML = "";
+      for (let i = 0; i < categoryData.length; i++) {
+         let newCategory = gen("span");
+         addClassList(newCategory, ["border", "border-dark", "rounded-pill", "p-3", "mr-2", "tag",
+                                    "mb-2"]);
+         newCategory.id = "id-" + categoryData[i].id;
+         newCategory.textContent = categoryData[i]["name"];
+         newCategory.addEventListener("click", function() {
+            addOrRemove(selectedCategories, parseInt(categoryData[i]["id"]));
+         });
+         newCategory.addEventListener("click", toggleSelection);
+         categoryCont.appendChild(newCategory);
+      }
+   }
+
+   /**
+    * Toggles the category tag 'this' references between selected and non-selected
+    */
+   function toggleSelection() {
+      this.classList.toggle("selected");
+   }
+
+   /**
+    * Clears all of the currently selected categories
+    */
+   function clearSelected() {
+      const allCategories = id("category-cont").querySelectorAll("span");
+      for(let i = 0; i < allCategories.length; i++) {
+         allCategories[i].classList.remove("selected");
+      }
+      selectedCategories = [];
+   }
+
+   /**
+    * Makes a GET request to the server for all the resources
+    * If an error has occurred, will display error to page
+    */
    function fetchAllResources() {
       fetch(API + "resources" + "/admin")
+         .then(checkStatus)
+         .then(JSON.parse)
+         .then((resources) => {
+            displayResources(resources);
+         })
+         .catch(console.log);
+   }
+
+   /**
+    * Makes a GET request to the server for the specific resources with a name that contains a word
+    * If an error has occurred, will display error to page
+    */
+   function searchByName() {
+      let queryInput = id("query-input");
+      fetch(API + "resources" + "/admin/" + "?name=" + queryInput.value)
          .then(checkStatus)
          .then(JSON.parse)
          .then(displayResources)
          .catch(console.log);
    }
 
+   /**
+    * Adds all of the info of the resources and displays it to the page
+    * @param {JSON[]} resources - The array of JSON containing, each item containing the info on a
+    *                             resource
+    */
    function displayResources(resources) {
       let resourceCont = id("resources-table").querySelector("tbody");
       resourceCont.innerHTML = "";
@@ -47,11 +190,16 @@
          changeStatusCont.appendChild(changeStatusBtn);
          let editBtnCont = gen("td");
          let editBtn = gen("button");
+         editBtn.addEventListener("click", function() {
+            $('#resource-modal').modal('show');
+            prepareResourceModal(resources[i]);
+         });
          editBtn.textContent = "Edit";
          addClassList(editBtn, ["btn", "bg-husky", "text-white"]);
          editBtnCont.appendChild(editBtn);
          let removeBtnCont = gen("td");
          let removeBtn = createFontAwsIcon("times");
+         removeBtn.addEventListener("click", () => removeResource(resources[i]["id"]));
          removeBtn.classList.add("fa-3x");
          removeBtnCont.appendChild(removeBtn);
          appendChildren(newResource, [resourceName, resourceDesc, resourceLink, resourceIcon,
@@ -59,6 +207,88 @@
                                       removeBtnCont]);
          resourceCont.appendChild(newResource);
       }
+   }
+
+   /**
+    * Prepares the resources modal for the user to edit the info of a clicked on resource
+    * @param {JSON} resourceData - The associative array, {id:
+                                                                 name:
+                                                                 description:
+                                                                 expire:}
+    */
+   function prepareResourceModal(resourceData) {
+      clearSelected();
+      addTags(resourceData.tags);
+      currentlyActiveCats = resourceData.tags;
+      currentResource = resourceData.id;
+      const modal = id("resource-modal");
+      const attributes = ["name", "icon", "link", "description", "expire"];
+      for (let i = 0; i < attributes.length; i++) {
+         let value = resourceData[attributes[i]];
+         if (!value) {
+            value = "";
+         }
+         document.getElementById("resource-modal-" + attributes[i]).placeholder = value;
+      }
+   }
+
+   /**
+    * Finds the difference between the first and the second array
+    * "arr1 - arr2"
+    * @param {Object[]} arr1 - The array to remove elements from
+    * @param {Object[]} arr2 - The array to remove elements according to
+    * @return {Object[]} - The new array containing all elements from arr1 that arent present in
+    *                      arr2
+    */
+   function arrayDifference(arr1, arr2) {
+      const output = arr1.filter(current => !(arr2.includes(current)));
+      return output;
+   }
+
+   /**
+    * "Toggles" a specified value inside a specified array
+    * If an error has occurred, will display error to page
+    * @param {String/int} array - The array to toggle the value for
+    * @param {String/int} value - The value to toggle in the array
+    */
+   function addTags(activeTags) {
+      for (const tag of activeTags) {
+         id("id-" + tag).classList.add("selected");
+      }
+   }
+
+   /**
+    * "Toggles" a specified value inside a specified array
+    * If an error has occurred, will display error to page
+    * @param {String/int} array - The array to toggle the value for
+    * @param {String/int} value - The value to toggle in the array
+    */
+   function addOrRemove(array, value) {
+    let index = array.indexOf(value);
+    if (index === -1) {
+        array.push(value);
+    } else {
+        array.splice(index, 1);
+    }
+}
+
+   /**
+    * Makes a DELETE request to delete a resource
+    * If an error has occurred, will display error to page
+    * @param {String/int} id- The ID of the resource to delete
+    */
+   function removeResource(id) {
+      fetch(API + "resources/" + id, {method: "DELETE"})
+         .then(checkStatus)
+         .then(function(result) {
+            displaySuccess(result);
+            fetchAllResources();
+         })
+         .catch(console.log);
+   }
+
+   function openEdit() {
+
    }
 
    /**
@@ -86,8 +316,27 @@
       }
    }
 
-   function changeResourceStatus(id,currentStatus) {
-
+   /**
+    * Makes a PUT request to change the status of a resource
+    * If the resource is currently on STANDBY, sets the status to APPROVED and vice versa
+    * If an error has occurred, will display error to page
+    * @param {String/int} id - The ID of the resource to change
+    * @return {String} - The current status of the resource, either APPROVED or STANDBY
+    */
+   function changeResourceStatus(id, currentStatus) {
+      let status;
+      if (currentStatus === APPROVED) {
+         status = STANDBY;
+      } else {
+         status = APPROVED;
+      }
+      fetch(API + "resources/" + id + "/status/"  + status, {method: "PUT"})
+         .then(checkStatus)
+         .then(function(result) {
+            displaySuccess(result);
+            fetchAllResources();
+         })
+         .catch(console.log);
    }
 
    /**
@@ -165,18 +414,18 @@
    }
 
    /**
-     * Checks and reports on the status of the fetch call
-     * @param {String} response - The response from the fetch that was made previously
-     * @return {Promise/String} - The success code OR The error promise that resulted from the fetch
-   */
-   function checkStatus(response) {
-      if (response.status >= 200 && response.status < 300 || response.status === 0) {
-         return response.text();
-      } else {
-         return Promise.reject(new Error(response.status + ": " + response.statusText));
-      }
+    * Checks and reports on the status of the fetch call
+    * @param {String} response - The response from the fetch that was made previously
+    * @return {Promise/String} - The success code OR The error promise that resulted from the fetch
+    */
+   async function checkStatus(response) {
+     if (response.status >= 200 && response.status < 300 || response.status === 0) {
+       return response.text();
+     } else {
+       let errorMessage = await response.json();
+       return Promise.reject(new Error(errorMessage.error));
+     }
    }
-
    /**
     * Adds an array of classes to classlist of given HTMLDOM object
     * @param {HTMLDOM} object - The object to add classes to
