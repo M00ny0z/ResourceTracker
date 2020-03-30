@@ -1,6 +1,7 @@
 <?php
 include("common.php");
 include("request.php");
+include("HttpMultipartParser.php");
 $uri = parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH);
 $uri = substr($uri, strpos($uri, "API.php/"));
 $uri = substr($uri, strpos($uri, "/") + 1);
@@ -44,7 +45,7 @@ function parse_body_data($data) {
 */
 function build_endpoint_map($map) {
    $map->put("(resources$)", array("POST" => 'create_resource_request'));
-   $map->put("(resources\/\d+$)", array("PUT" => 'approve_resource_request',
+   $map->put("(resources\/\d+$)", array("PUT" => 'update_resource_request',
                                         "DELETE" => 'remove_resource_request'));
    $map->put("(resources\/admin(\/|)$)", array("GET" => 'get_all_resources_request'));
    $map->put("(resources\/tags$)", array("PUT" => 'update_resource_tags_request'));
@@ -57,7 +58,6 @@ function build_endpoint_map($map) {
 
    $map->put("(categories$)", array("GET" => 'get_categories_request',
                                     "POST" => 'add_category_request'));
-
    $map->put("(categories\/\d+$)", array("DELETE" => 'remove_category_request'));
    $map->put("(categories\/\d+\/status\/APPROVE$)", array("PUT" => 'approve_category_request'));
 
@@ -228,6 +228,9 @@ function get_all_resources_request($uri, $user) {
       }
       try {
          $data = get_all_resources($db, $name);
+         for ($i = 0; $i < count($data); $i++) {
+            $data[$i]["tags"] = get_resource_tags($db, $data[$i]["id"]);
+         }
          header("Content-type: application/json");
          echo(json_encode($data));
       } catch (PDOException $ex) {
@@ -235,6 +238,64 @@ function get_all_resources_request($uri, $user) {
       }
    } else {
       invalid_request(ADMIN_ERROR);
+   }
+}
+
+function update_resource_tags($db, $resource_id, $_PUT) {
+   if (isset($_PUT["add"])) {
+      $categories_to_add = json_decode($_PUT["add"]);
+   }
+   if (isset($_PUT["remove"])) {
+      $categories_to_remove = json_decode($_PUT["remove"]);
+   }
+   $outcome = true;
+   if (!empty($categories_to_add)) {
+      $outcome = $outcome && add_tags($db, $resource_id, $categories_to_add);
+   }
+   if (!empty($categories_to_remove)) {
+      $outcome = $outcome && remove_tags($db, $resource_id, $categories_to_remove);
+   }
+   return $outcome;
+}
+
+/**
+  * Handles the request to update the information of a resource
+  * Needed URI params: $resource_id
+  * All PUT params are not needed
+  * Must be an admin
+  * @param {String[]} $uri - The array of strings of the request URI, does not include the first
+  *                          two pieces
+  * @param {String} $user - The user who has made the request
+  * @param {PUT} $name - The new name for the resource
+  * @param {PUT} $description - The new description for the resource
+  * @param {PUT} $link - The new link for the resource
+  * @param {PUT} $icon - The new icon for the resource
+  * @param {PUT} $expire - The new expiration date for the resource
+  * THROWS PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * IF NOT AN ADMIN, SENDS INVALID REQUEST
+*/
+function update_resource_request($uri, $user) {
+   $_PUT = trim_endings(HttpMultipartParser::parse_stdin()["variables"]);
+   $db = get_PDO();
+   try {
+      if (is_admin($db, $user)) {
+         if (is_valid_resource_id($db, $uri[1])) {
+            $resource_id = $uri[1];
+            update_resource($db, $resource_id, $_PUT);
+            $outcome = update_resource_tags($db, $resource_id, $_PUT);
+            if ($outcome) {
+               success("Successfully updated resource.");
+            } else {
+               db_error();
+            }
+         } else {
+            invalid_request(RESOURCE_ID_ERROR);
+         }
+      } else {
+         invalid_request(ADMIN_ERROR);
+      }
+   } catch (PDOException $ex) {
+      db_error($ex);
    }
 }
 
@@ -577,6 +638,36 @@ function unblock_user_request($uri, $user) {
    }
 }
 
+function trim_endings($arr) {
+   foreach ($arr as $name => $value) {
+      $arr[$name] = trim($value);
+   }
+   return $arr;
+}
+
+function update_resource($db, $resource_id, $_PUT) {
+   $possible_keys = ["name", "link", "description", "icon", "expire"];
+   $to_update = array_intersect(array_keys($_PUT), $possible_keys);
+   $result = true;
+   if (!empty($to_update)) {
+      $query = "UPDATE resource SET ";
+      $query = $query . $to_update[0] . " = :" . $to_update[0] . " ";
+      for ($i = 1; $i < count($to_update); $i++) {
+         $query = $query . ", " . $to_update[$i] . " = :" . $to_update[$i] . " ";
+      }
+      $query = $query . " WHERE id = :id;";
+      $stmt = $db->prepare($query);
+      // Garbage value of 0, only need to compare the keys and get the user provided values
+      $params = array_intersect_key($_PUT, array_fill_keys($possible_keys, 0));
+      $params["id"] = $resource_id;
+      $stmt->execute($params);
+      $result = $stmt->rowCount() > 0;
+      $stmt->closeCursor();
+      $stmt = null;
+   }
+   return $result;
+}
+
 function is_admin($db, $netid) {
    return true;
 }
@@ -639,11 +730,33 @@ function verify_resource_info($name, $link, $description, $icon) {
   *                    its ID, name, link, description, icon, status, and user
 */
 function get_all_resources($db, $name="") {
-   $query = "SELECT * FROM resource ";
+   $query = "SELECT r.id, r.name, r.link, r.description, r.icon, r.status, r.user, r.expire " .
+            "FROM resource r ";
    if ($name != "") {
       $query = $query . "WHERE name LIKE '%{$name}%';";
    }
    $data = $db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+   return $data;
+}
+
+/**
+  * Queries the database to get a list of all the category_IDs associated with the resource
+  * WILL THROW PDOEXCEPTION IF DATABASE ERROR HAS OCCURRED
+  * @param {PDObject} db - The PDO Object connected to the ResourceTrakerDB
+  * @param {String/int} resource_id - The resource ID to retrieve categories for
+  * @return {String/int[]} - The array where each item is a category_id that is associated with the
+  *                          resource
+*/
+function get_resource_tags($db, $resource_id) {
+   $query = "SELECT t.category_id " .
+            "FROM tag t " .
+            "WHERE t.resource_id = :id;";
+   $stmt = $db->prepare($query);
+   $stmt->execute(["id" => $resource_id]);
+   $data = $stmt->fetchAll(PDO::FETCH_COLUMN);
+   $data = array_values($data);
+   $stmt->closeCursor();
+   $stmt = null;
    return $data;
 }
 
