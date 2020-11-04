@@ -16,13 +16,45 @@
    function main() {
       fetchCategories();
       fetchResources();
+      const queryBtn = id("query-btn");
+      queryBtn.addEventListener("click", searchByName);
+   }
+
+   /**
+    * Makes a GET request to the server for the specific resources with a name that contains a word
+    * If an error has occurred, will display error to page
+    */
+   function searchByName() {
+      const categories = qsa(".active");
+      let categoriesString = "";
+      if (categories.length > 0) {
+         for (let i = 0; i < categories.length - 1; i++) {
+            let currentCategory = categoryMap.get(categories[i].textContent);
+            categoriesString = categoriesString + "categories[]=" + currentCategory + "&";
+         }
+         categoriesString = categoriesString + "categories[]=" +
+                            categoryMap.get(categories[categories.length - 1].textContent);
+      }
+      const queryInput = id("query-input");
+      let query = API + "resources/?" + categoriesString;
+
+      if (categories.length > 0) {
+         query = query + "&";
+      }
+
+      query = query + "name=" + queryInput.value;
+      fetch(query)
+         .then(checkStatus)
+         .then(JSON.parse)
+         .then(displayResources)
+         .catch(console.log);
    }
 
    /**
     * Makes a fetch GET request to retrieve all of the categories currently offered
     */
    function fetchCategories() {
-      fetch(API + "categories/")
+      fetch(API + "categories")
          .then(checkStatus)
          .then(JSON.parse)
          .then(function(categories) {
@@ -57,7 +89,7 @@
          categoriesString = categoriesString + "categories[]=" +
                             categoryMap.get(categories[categories.length - 1].textContent);
       }
-      let query = API + "resources?" + categoriesString;
+      let query = API + "resources/?" + categoriesString;
       fetch(query)
          .then(checkStatus)
          .then(JSON.parse)
@@ -70,6 +102,7 @@
     * @param {JSON[]} categories - The array of categories, each item containing its name and ID
     */
    function displayResources(resources) {
+      console.log(resources);
       let resourceContainer = qs("main section");
       resourceContainer.innerHTML = "";
       if (resources.length > 0) {
@@ -167,16 +200,17 @@
    }
 
    /**
-     * Checks and reports on the status of the fetch call
-     * @param {String} response - The response from the fetch that was made previously
-     * @return {Promise/String} - The success code OR The error promise that resulted from the fetch
-   */
-   function checkStatus(response) {
-      if (response.status >= 200 && response.status < 300 || response.status === 0) {
-         return response.text();
-      } else {
-         return Promise.reject(new Error(response.status + ": " + response.statusText));
-      }
+    * Checks and reports on the status of the fetch call
+    * @param {String} response - The response from the fetch that was made previously
+    * @return {Promise/String} - The success code OR The error promise that resulted from the fetch
+    */
+   async function checkStatus(response) {
+     if (response.status >= 200 && response.status < 300 || response.status === 0) {
+       return response.text();
+     } else {
+       let errorMessage = await response.json();
+       return Promise.reject(new Error(errorMessage.error));
+     }
    }
 
    /**

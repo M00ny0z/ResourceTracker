@@ -6,7 +6,7 @@
 "use strict";
 (function() {
    window.addEventListener("load", main);
-   const API = "API.php/";
+   const API = "admin.php/";
    const APPROVED = "APPROVED";
    const STANDBY = "STANDBY";
 
@@ -50,10 +50,17 @@
 
       fetch(API + "resources/" + currentResource, {method: "PUT", body: data})
          .then(checkStatus)
-         .then(displaySuccess)
+         .then(function(data) {
+            displaySuccess(data);
+            fetchAllResources();
+         })
          .catch(displayError);
    }
 
+   /**
+    * Removes any empty data from the FormData object
+    * @param {FormData} form - The FormData object to remove data from
+    */
    function removeEmptyData(form) {
       const attributes = ["name", "icon", "link", "description", "expire"];
       for (const attribute of attributes) {
@@ -62,6 +69,26 @@
          }
       }
       return form;
+   }
+
+   function displayCategoryData(categoryData) {
+      const categoryTable = id("category-table").querySelector("tbody");
+      categoryTable.innerHTML = "";
+      for (const category of categoryData) {
+         const newCategory = gen("tr");
+         const newName = gen("td");
+         newName.textContent = category.name;
+         const editBtnCont = createEditBtn();
+         const approveBtn = createStatusChangeBtn(category.status,
+                                                        category.id,
+                                                        changeCategoryStatus);
+      }
+   }
+
+   function changeCategoryStatus(id) {
+      fetch(API + id + "/status/APPROVE", {method: 'PUT'})
+         .then(checkStatus)
+         .then(displaySuccess);
    }
 
    function getSelectedTags() {
@@ -107,6 +134,26 @@
          newCategory.addEventListener("click", toggleSelection);
          categoryCont.appendChild(newCategory);
       }
+   }
+
+   function displayUnapprovedCategories(categoryData) {
+      const categoryCont = id("uncategory-table");
+      categoryCont.innerHTML = "";
+      for (let i = 0; i < categoryData.lenth; i++) {
+         const newCategory = gen("span");
+      }
+   }
+
+   /**
+    * Makes a fetch POST call to submit a new category
+    */
+   function submitNewCategory() {
+      const data = new FormData();
+      data.append("name", id("category-name").value);
+      fetch(API + "categories", {body: data, method: 'POST'})
+         .then(checkStatus)
+         .then(displaySuccess)
+         .catch(displayError);
    }
 
    /**
@@ -174,29 +221,10 @@
          resourceIcon.appendChild(icon);
          let created = createDataCell(resources[i]["user"]);
          let expire = createDataCell(giveExpire(resources[i]["expire"]));
-         let changeStatusCont = gen("td");
-         let changeStatusBtn = gen("button");
-         addClassList(changeStatusBtn, ["btn", "text-white"]);
-         changeStatusBtn.addEventListener("click", () =>
-                                          changeResourceStatus(resources[i]["id"],
-                                                               resources[i]["status"]));
-         if (resources[i]["status"] === APPROVED) {
-            changeStatusBtn.classList.add("bg-danger");
-            changeStatusBtn.textContent = "Standby?";
-         } else {
-            changeStatusBtn.classList.add("bg-success");
-            changeStatusBtn.textContent = "Approve?";
-         }
-         changeStatusCont.appendChild(changeStatusBtn);
-         let editBtnCont = gen("td");
-         let editBtn = gen("button");
-         editBtn.addEventListener("click", function() {
-            $('#resource-modal').modal('show');
-            prepareResourceModal(resources[i]);
-         });
-         editBtn.textContent = "Edit";
-         addClassList(editBtn, ["btn", "bg-husky", "text-white"]);
-         editBtnCont.appendChild(editBtn);
+         const changeStatusCont = createStatusChangeBtn(resources[i]["status"],
+                                                        resources[i]["id"],
+                                                        changeResourceStatus);
+         const editBtnCont = createEditBtn(resources[i]);
          let removeBtnCont = gen("td");
          let removeBtn = createFontAwsIcon("times");
          removeBtn.addEventListener("click", () => removeResource(resources[i]["id"]));
@@ -207,6 +235,44 @@
                                       removeBtnCont]);
          resourceCont.appendChild(newResource);
       }
+   }
+
+   /**
+    * Creates a new button which upon click, changes the status of an item
+    * If the current status of the item is APPROVED, sets color green and sets text to "Standby?"
+    * Else, sets the color to red and sets text to "Approve?"
+    * @param {String} currentStatus - The current status of the item
+    * @param {String/int} itemID - The ID of the item to change status for
+    * @param {String} changeStatus - The function callback to call, upon changing t
+    * @return {HTMLDOM} - The new button that changes the status of an item upon click
+    */
+   function createStatusChangeBtn(currentStatus, itemID, changeStatus) {
+      const changeStatusCont = gen("td");
+      const changeStatusBtn = gen("button");
+      addClassList(changeStatusBtn, ["btn", "text-white"]);
+      changeStatusBtn.addEventListener("click", () => changeStatus(itemID, currentStatus));
+      if (currentStatus === APPROVED) {
+         changeStatusBtn.classList.add("bg-success");
+         changeStatusBtn.textContent = "Approved";
+      } else {
+         changeStatusBtn.classList.add("bg-danger");
+         changeStatusBtn.textContent = "On-Standby";
+      }
+      changeStatusCont.appendChild(changeStatusBtn);
+      return changeStatusCont;
+   }
+
+   function createEditBtn(info) {
+      const editBtnCont = gen("td");
+      const editBtn = gen("button");
+      editBtn.addEventListener("click", function() {
+         $('#resource-modal').modal('show');
+         prepareResourceModal(info);
+      });
+      editBtn.textContent = "Edit";
+      addClassList(editBtn, ["btn", "bg-husky", "text-white"]);
+      editBtnCont.appendChild(editBtn);
+      return editBtnCont;
    }
 
    /**

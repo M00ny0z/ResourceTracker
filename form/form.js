@@ -1,30 +1,57 @@
 (function() {
    window.addEventListener("load", main);
 
-   const API = "API.php/";
+   const API = "form.php/";
 
    function main() {
+      $(function () {
+          $('#expire-picker').datetimepicker({
+             format: 'YYYY-MM-DD'
+          });
+      });
+      $(function () {
+        $('[data-toggle="tooltip"]').tooltip();
+      });
+      fetchCategories();
       let form = qs("form");
       form.addEventListener("submit", function(e) {
          e.preventDefault();
          submitResource();
       });
-      fetchCategories();
    }
 
+   /**
+    * Makes a fetch POST request to submit the new resource into the database
+    */
    function submitResource() {
-      let data = new FormData(qs("form"));
+      const data = removeEmptyData(new FormData(qs("form")));
       fetch(API + "resources", {method: "POST", body: data})
          .then(checkStatus)
-         .then(console.log)
+         .then(function(message) {
+            displaySuccess(message);
+            qs("form").reset();
+         })
          .catch(displayError);
+   }
+
+   /**
+    * Adds input boxes to add new categories
+    */
+   function addCustomCategory() {
+      let customCategoryCont = id("custom-category-cont");
+      let newCategory = gen("input");
+      addClassList(newCategory, ["other-input", "form-control", "mb-2"]);
+      newCategory.type = "text";
+      newCategory.name = "categories[]";
+      newCategory.placeholder = "Type in your category, Ex. Food";
+      customCategoryCont.appendChild(newCategory);
    }
 
    /**
     * Makes a fetch GET request to retrieve all of the categories currently offered
     */
    function fetchCategories() {
-      fetch(API + "categories/")
+      fetch(API + "categories")
          .then(checkStatus)
          .then(JSON.parse)
          .then(addCategoryOptions)
@@ -41,13 +68,6 @@
       for (let i = 0; i < categories.length; i++) {
          let checkBox = createCheckbox(categories[i]["id"], categories[i]["name"], i);
          categoryContainer.appendChild(checkBox);
-         if (i === categories.length - 1) {
-            checkBox = createCheckbox(0, "Other", i + 1);
-            checkBox.addEventListener("click", function() {
-               id("other-input").parentElement.classList.remove("hidden");
-            });
-            categoryContainer.appendChild(checkBox);
-         }
       }
    }
 
@@ -114,16 +134,31 @@
    }
 
    /**
-     * Checks and reports on the status of the fetch call
-     * @param {String} response - The response from the fetch that was made previously
-     * @return {Promise/String} - The success code OR The error promise that resulted from the fetch
-   */
-   function checkStatus(response) {
-      if (response.status >= 200 && response.status < 300 || response.status === 0) {
-         return response.text();
-      } else {
-         return Promise.reject(new Error(response.status + ": " + response.statusText));
+    * Removes any empty data from the FormData object
+    * @param {FormData} form - The FormData object to remove data from
+    */
+   function removeEmptyData(form) {
+      const attributes = ["name", "icon", "link", "description", "expire"];
+      for (const attribute of attributes) {
+         if (form.get(attribute) === "" || form.get(attribute) === " ") {
+            form.delete(attribute);
+         }
       }
+      return form;
+   }
+
+   /**
+    * Checks and reports on the status of the fetch call
+    * @param {String} response - The response from the fetch that was made previously
+    * @return {Promise/String} - The success code OR The error promise that resulted from the fetch
+    */
+   async function checkStatus(response) {
+     if (response.status >= 200 && response.status < 300 || response.status === 0) {
+       return response.text();
+     } else {
+       let errorMessage = await response.json();
+       return Promise.reject(new Error(errorMessage.error));
+     }
    }
 
    /**

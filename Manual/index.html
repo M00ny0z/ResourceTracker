@@ -1,0 +1,79 @@
+<html><head><style>body {
+   color: black;
+}
+</style>
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+</head><body><h1 id="resourcetracker-manual" class="text-center">ResourceTracker Manual</h1>
+<p>This is the manual for the ResourceTracker application. ResourceTracker allows students to view the
+currently available resources on campus. It also allows faculty and staff to add and approve of
+resources.</p>
+<h2 id="table-of-contents" class="text-center">Table of Contents</h2>
+<ol class="d-flex flex-column align-items-center">
+<li><a href="#viewing-resources-as-a-student">Viewing resources as a student</a></li>
+<li><a href="#adding-resources">Adding Resources</a></li>
+<li><a href="#managing-resources">Managing Resources</a></li>
+</ol>
+<h3 id="viewing-resources-as-a-student" class="text-center">Viewing resources as a student</h3>
+<p>To view resources as a student, simply go <a href="https://depts.washington.edu/uwtslwebdev/ResourceTracker/">here</a>.
+This is also the home page for the ResourceTracker application. From here, you can see all of the
+resources that do not belong to a specific category.</p>
+<p>You can click on a category to view resources that belong to said category. If you no longer wish to
+see the resources under said category, simply click it again. You can select multiple categories
+all at once which will show resources that belong to any one of the selected categories.</p>
+<p>You can also use the search bar to search for resources that contain in the name or in the Description
+what you have typed in.</p>
+<p>Upon clicking on a resource, you will see its description and a link to the resource.</p>
+<p><img src="HomePage.JPG" class="w-100" alt="Home Page View"></p>
+<p><img src="ResourceView.JPG" class="w-100" alt="When viewing a specific resource"></p>
+<h3 id="adding-resources" class="text-center">Adding Resources</h3>
+<p>To add a new resource, simply go <a href="https://depts.washington.edu/uwtslwebdev/ResourceTracker/form/">here</a>.</p>
+<p><em><strong>PLEASE NOTE:</strong></em> You must have a valid UWNETID to add a new resource.</p>
+<p>From here, you can type in the name of the resource, the link to it, the icon to display for it,
+an expiration date (if applicable), the categories the resource goes under, and the description for
+the resource.</p>
+<p><strong>ALL</strong> textboxes (except for expiration date) <strong>MUST</strong> be filled in. You will not be able to submit
+until they are all filled in.</p>
+<p>The resource name will be the first thing a user will see regarding the resource, as well as the icon.</p>
+<p>The icon should be something that can represent what the resource is or does. Icons <strong>MUST</strong> be the name
+of a font-awesome icon which you can find <a href="https://fontawesome.com/icons?d=gallery&amp;m=free">here</a>.</p>
+<p>The resource description will be the that the user sees when they have clicked on the resource. Ideally,
+you go into detail about what the resource is, who it is for, etc.</p>
+<p>The resource link will be where the user will be taken to if the user clicks on the &quot;Resource Link&quot; button when viewing the resource.</p>
+<p><em><strong>PLEASE NOTE:</strong></em> Please make sure the link starts with &quot;http://&quot; or &quot;https://&quot;.</p>
+<p>For the categories, it is recommended you select at least one. Please check all of the categories
+that the resource can belong to. If you did not mean to select one, simply click on it again to de-select it.</p>
+<p>Once all of the information has been added, click on &quot;Submit&quot;. New resources are placed on standby (Unless you are an admin)
+and <strong>MUST</strong> be approved by an admin before they are visible on the website.</p>
+<p><img src="AddResource.JPG" class="w-100" alt="Adding Resource View"></p>
+<h3 id="managing-resources" class="text-center">Managing Resources</h3>
+<p>To manage resources, simply head <a href="https://depts.washington.edu/uwtslwebdev/ResourceTracker/admin/">here</a>.</p>
+<p><em><strong>PLEASE NOTE:</strong></em> Access to the managing page is restricted to the <strong>Office of Student Advocacy and Support</strong>.</p>
+<p>From the managing page, you can see <em>all</em> of the resources both approved and on-standby resources.</p>
+<p>Approved resources are visible on the home page.</p>
+<p>On-Standby resources are <strong>NOT</strong> visible on the home page and must be approved before they become visible.</p>
+<p>The managing page displays all of the resources and their info. You can see the name, description,
+link, a small version of the icon, the user who added the resource, the expiration date if it has one,
+the current status of the resource, an edit button to edit the resource, and a remove button to
+permanently delete the resource.</p>
+<p>For the resource status, if it is green, the resource is approved and is visible on the home page.</p>
+<p>If it is red, the resource is on-standby and is <strong>NOT</strong> visible on the home page.</p>
+<p>To change the status of the resource, click on the Resource Status button. This will flip the
+status of the resource from Approved to Standby and vice versa.</p>
+<p><img src="ManageView.JPG" class="w-100" alt="Manage View">
+To edit the information of a resource, click on the &quot;Edit&quot; button which will bring up the edit view
+for the resource.</p>
+<p>From the edit view, you can edit the all of the information regarding a resource. You can see all of
+the current information regarding a resource.</p>
+<p>For the pieces of information you want to change, type in the new value inside the box.
+For the pieces of information you want to stay the same, leave it blank.</p>
+<p>Under the tags section, you can change what categories the resource appears under.</p>
+<p>To change the categories in which the resource appears under, click on the category you want to
+change. Clicking on one will flip the status from colored-in to without-color and vice versa.</p>
+<p>If the category is colored-in, the resource will display under that category.
+If the category is without color, the resource does not currently display under that category.</p>
+<p>Once you had made all of the changes you wanted, click on the &quot;Submit&quot; button to submit all of the
+changes.</p>
+<p><strong>PLEASE NOTE:</strong> Changes will not be made live <strong>UNTIL</strong> you have clicked on the &quot;Submit&quot; button.</p>
+<p>If you want to cancel any changes, click on &quot;Cancel&quot;.</p>
+<p><img src="EditView.JPG" class="w-100" alt="Edit View"></p>
+</body></html>

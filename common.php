@@ -7,6 +7,7 @@
    ini_set('display_errors', 1);
    const STANDBY = "STANDBY";
    const APPROVE = "APPROVED";
+   const RESOURCE_ID_ERROR = "I need a valid resource ID for this operation for this endpoint.";
    const DATABASE_ERROR = "Something has occurred with database. Please try again later.";
    const RESOURCE_VALID_ERROR = "I need a valid name, link, description, and icon to add a new " .
                                "resource.";
@@ -37,6 +38,21 @@
       handle_error("Can not connect to the database. Please try again later.", $ex);
     }
   }
+
+  /**
+ * Returns a PDO object connected to the speclister database. Throws
+ * a PDOException if an error occurs when connecting to database.
+ * @return {PDO}
+ */
+// function get_PDO() {
+//   try {
+//     $db = new PDO("mysql:dbname=resourcetrackerdb;host=uwtslwebdev.ovid.u.washington.edu;port=1100;charset=utf8", "root", "youarewhatyoudo69");
+//     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+//     return $db;
+//   } catch (PDOException $ex) {
+//     echo($ex);
+//   }
+// }
 
 /**
   * Checks a specific table to see if a specific value for a specific attribute exists

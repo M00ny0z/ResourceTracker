@@ -61,7 +61,7 @@ NOTE: You must be an admin to access this endpoint.
 Will output a 400 error if the provided resourceID is not valid.
 
 ### *resources?categories=*
-**Request Format:** /resourcetracker/resources?categories[]={CATEGORY ID}
+**Request Format:** /resourcetracker/resources/?categories[]={CATEGORY ID}
 
 **Request Type:** GET
 
@@ -72,7 +72,7 @@ This endpoint will retrieve all of the approved resources. This endpoint can tak
 parameter of categories
 
 
-**Example Request:** /resourcetracker/resources?categories[]=1&categories[]=2
+**Example Request:** /resourcetracker/resources/?categories[]=1&categories[]=2
 
 **Example Response:**
 
@@ -124,7 +124,8 @@ It can also take an optional parameter of "other" which should there be a catego
 
 **Example Request:** /resourcetracker/resources
                      form-data: (name: "Huscii", link: "www.google.com", desc: "code group",
-                                 icon: "fas-code", tags: "[1, 2]")
+                                 icon: "fas-code", tags: "[1, 2]",
+                                 categories: "[healthcare, extracurriculars]")
 
 **Example Response:**
 

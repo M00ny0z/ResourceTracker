@@ -70,11 +70,18 @@ li {
 .active {
   background-color: #4B2E83 !important; }
 
+.selected {
+  background-color: #4b2e83;
+  color: white; }
+
 button a {
   color: white !important;
   text-decoration: none; }
 
-a {
+.fa-times {
+  color: red; }
+
+a, .fa-times, .tag {
   cursor: pointer; }
 
 .hidden {
